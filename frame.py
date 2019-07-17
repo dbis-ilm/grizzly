@@ -1,89 +1,78 @@
-import sqlalchemy
-from sqlalchemy.sql import select
+# import sqlalchemy
+from sqlops import From, Filter, Projection
+from column import Column, Eq, Expr
+from connection import Connection
+import query
 
-class Connection(object):
+class DataFrame2(object):
+  @staticmethod
+  def fromTable(tableName):
+    # self.tableName = tableName
+    # table = sqlalchemy.Table(tableName, Connection.md, autoload=True, autoload_with=Connection.engine)
+    
+    columns = []
+    # for c in table.columns:
+    #     columns.append(Column(tableName, c.name, c.type, table))
 
-    engine = None
-    md = None
-    @staticmethod
-    def init(dbname, user, pw, host="localhost", port=5432):
-        Connection.engine = sqlalchemy.create_engine(f"postgresql://{user}:{pw}@{host}:{port}/{dbname}").connect()
-        Connection.md = sqlalchemy.MetaData()
+    return DataFrame2(columns, From(tableName))
 
-class Column(object):
-    def __init__(self, relation, name, dtype,   table):
-        self.relation = relation
-        self.name = name
-        self.dtype = dtype
-        self.table = table
+  def __init__(self, columns, op):
+    self.op = op
+    self.columns = columns
 
-    def fqn(self):
-        return f"{relation}.{name}"
+  def filter(self, expr):
+    self.op = Filter(expr, self.op)
+    return self
 
-    def __eq__(self, other):
-        # print("eq function")
-        expr = self.table.select(self.table.columns[self.name].__eq__(other))
-        # print(str(expr))
-        return expr
+  def project(self, attrs):
+    op = Projection(attrs, self.op)
+    newColumns = attrs #[col for col in self.columns if col.name in attrs]
 
-    def __str__(self): 
-        return f"{self.relation}.{self.name}:{self.dtype}"
+    return DataFrame2(newColumns, op)
 
-class DataFrame(object):
+  def __getitem__(self, key):
+    theType = type(key)
 
-    @staticmethod
-    def fromTable(tableName):
-        # self.tableName = tableName
-        table = sqlalchemy.Table(tableName, Connection.md, autoload=True, autoload_with=Connection.engine)
-        
-        columns = {}
-        for c in table.columns:
-            columns[c.name] = Column(tableName, c.name, c.type, table)
+    if isinstance(key, Expr):
+      # print(f"filter col: {key}")
+      return self.filter(key)
+    elif theType is str:
+      # print(f"projection col: {key}")
+      return self.project([key])
+    else:
+      print(f"{key} has type {theType} -- ignoring")
+      return self
 
-        return DataFrame(None, columns, table)
+  def sql(self):
+    
+    qry = query.Query()
 
-
-    def __init__(self, parent, columns, op):
-        self.parent = parent
-        self.op = op
-        self.columns = columns
-
-    def __getitem__(self, key):
-        theType = type(key)
-
-        # projection
-        if theType is list:
-            newDF = DataFrame(self, self.columns, self.op.select(key))
-            return newDF
-        elif theType is str:
-            return self.columns[key]
-        if theType is sqlalchemy.sql.selectable.Select:
-            newDF = DataFrame(self, self.columns, self.op.select(key))
-            return newDF
-        else:
-            print("blubb:"+str(theType))
+    currOp = self.op
+    while currOp != None:
+      
+      if isinstance(currOp, Filter):
+        qry.Filters.append(currOp)
+      elif isinstance(currOp, Projection):
+        qry.ProjList = currOp.attrs
+      elif isinstance(currOp, From):
+        qry.From.append(currOp.relation)
 
 
+      currOp = currOp.parent
 
-    def __setitem__(self, key, value):
-        pass
+    return qry.sql()
 
+  def show(self):
+    with Connection.engine.connect() as con:
+      rs = con.execute(self.sql())
 
-    # def _build(self):
-    #     if self.parent is not None:
-    #         return self.parent._build().op
-    #     else:
-    #         return op
+      for row in rs:
+        print(row)
 
-    def sql(self):
-        return str(self.op)
+################
+# comparisons
 
-if __name__ == "__main__":
-
-    Connection.init("","","","",5432)
-    df = DataFrame.fromTable("sensors")
-
-    # print(str(df.table.select(df.table.c.lat)))
-    # print(str(select([df.table.c.lat]).where(True)))
-    # print(df[df['country'] == 'hage'].sql())
-    print(df['country'] == 'hage')
+  def __eq__(self, other):
+    # print(f"eq on {self.columns[0]} and {other}")
+    expr = Eq(self.columns[0], other)
+    return expr
