@@ -7,5 +7,5 @@ df = frame.DataFrame2.fromTable("rna")
 df = df[df['id'] == '1252385']
 
 
-print(df['userstamp'].sql())
-df['userstamp'].show()
+print(df[['userstamp','upi']].sql())
+df[['userstamp','upi']].show()

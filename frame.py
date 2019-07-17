@@ -39,6 +39,8 @@ class DataFrame2(object):
     elif theType is str:
       # print(f"projection col: {key}")
       return self.project([key])
+    elif theType is list:
+      return self.project(key)
     else:
       print(f"{key} has type {theType} -- ignoring")
       return self
