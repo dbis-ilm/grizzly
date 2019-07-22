@@ -1,5 +1,5 @@
 # import sqlalchemy
-from sqlops import From, Filter, Projection
+from sqlops import From, Filter, Projection, Grouping
 from column import Column, Eq, Expr
 from connection import Connection
 import query
@@ -40,7 +40,9 @@ class DataFrame2(object):
 
   # def join
 
-  # def groupby
+  # def groupby(self, attrs):
+  #   self.op = Grouping(attrs, self.op)
+  #   return self
 
   def __getitem__(self, key):
     theType = type(key)
@@ -61,27 +63,40 @@ class DataFrame2(object):
 #####################################################
 ### aggregates
 
-  def min(self):
-    return self._execAgg(f'min({self.columns[0]})')
-
-  def max(self):
-    return self._execAgg(f'max({self.columns[0]})')
-
-  def average(self):
-    return self._execAgg(f'avg({self.columns[0]})')
-
-  def count(self):
-    return self._execAgg("count(*)")
-
-  def sum(self):
-    return self._execAgg(f'sum({self.columns[0]})')
+  def min(self, col=None):
+    return self._execAgg("min",col)
 
 
-  def _execAgg(self, func):
+  def max(self, col=None):
+    return self._execAgg("max",col)
+
+  def mean(self, col=None):
+    return self._execAgg('avg',col)
+
+  def count(self, col=None):
+    colName = "*"
+    if col is not None:
+      colName = col
+    return self._execAgg("count",colName)
+
+  def sum(self , col=None):
+    return self._execAgg("sum", col)
+
+
+  def _execAgg(self, func, col):
+
+    colName = None
+    if col is None:
+      colName = self.columns[0]
+    else:
+      colName = col
+
     innerSQL = self.sql()
-    aggSQL = f"SELECT {func} FROM ({innerSQL}) as t"
-    row = self.fetchOne(aggSQL)
-    return row[0]
+    aggSQL = f"SELECT {func}({colName}) FROM ({innerSQL}) as t"
+    
+    with Connection.engine.connect() as con:
+      row = con.execute(sql)
+      return row[0]
 
 
   def sql(self):
@@ -102,13 +117,6 @@ class DataFrame2(object):
       currOp = currOp.parent
 
     return qry.sql()
-
-  def fetchOne(self, sql):
-    print(f"executing {sql}")
-    with Connection.engine.connect() as con:
-      rs = con.execute(sql)
-
-      return rs.fetchone()
 
   def show(self):
     with Connection.engine.connect() as con:

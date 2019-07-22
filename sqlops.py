@@ -28,3 +28,7 @@ class Projection(SqlOp):
     self.attrs = attrs
 
 
+class Grouping(SqlOp):
+  def __init__(self, groupcols, parent):
+    super().__init__(parent)
+    self.groupcols = groupcols

@@ -10,11 +10,12 @@ df = frame.DataFrame2.fromTable("gdeltevents20mio")
 
 # df['goldsteinscale'].show()
 
-# print(f"count={df.count()}")
+print(f"count={df.count('actor2name')}")
 
 print(f"max={df['globaleventid'].max()}")
 print(f"min={df['globaleventid'].min()}")
 
+print(f"min_col = {df.min('globaleventid')}")
 # print(df[['userstamp','upi']].sql())
 # print(df['userstamp'].max().sql())
 
