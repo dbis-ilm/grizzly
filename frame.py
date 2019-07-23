@@ -40,9 +40,11 @@ class DataFrame2(object):
 
   # def join
 
-  # def groupby(self, attrs):
-  #   self.op = Grouping(attrs, self.op)
-  #   return self
+  def groupby(self, attrs):
+    # self.op = Grouping(attrs, self.op)
+    # return self
+    self.op = Grouping(attrs, self.op )
+    return DataFrame2(self.columns,  self.op)
 
   def __getitem__(self, key):
     theType = type(key)
@@ -65,7 +67,6 @@ class DataFrame2(object):
 
   def min(self, col=None):
     return self._execAgg("min",col)
-
 
   def max(self, col=None):
     return self._execAgg("max",col)
@@ -91,36 +92,67 @@ class DataFrame2(object):
     else:
       colName = col
 
-    innerSQL = self.sql()
-    aggSQL = f"SELECT {func}({colName}) FROM ({innerSQL}) as t"
-    
-    with Connection.engine.connect() as con:
-      row = con.execute(sql)
-      return row[0]
+    funcCode = f"{func}({colName})"  
 
+    if isinstance(self.op, Grouping):
+      newOp = Grouping(self.op.groupcols, self.op.parent)
+      newOp.setAggFunc(funcCode)
+      
+      return DataFrame2(self.columns, newOp)
+      
+    else:
+      return self._doExecAgg(funcCode)
+    
+
+  def _doExecAgg(self, funcCode):
+    innerSQL = self.sql()
+    aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
+    
+    rs = self._doExecQuery(aggSQL)
+    #fetch first (and only) row, return first column only
+    return rs.fetchone()[0] 
+
+
+  def _doExecQuery(self, qry):
+    with Connection.engine.connect() as con:
+      rs = con.execute(qry)
+      return rs
 
   def sql(self):
-    
+    """
+    Produce a SQL string from the current operator tree
+    """
+
     qry = query.Query()
 
     currOp = self.op
     while currOp != None:
       
       if isinstance(currOp, Filter):
-        qry.Filters.append(currOp)
+        qry.filters.append(currOp)
       elif isinstance(currOp, Projection):
-        qry.ProjList = currOp.attrs
+        qry.projList = currOp.attrs
       elif isinstance(currOp, From):
-        qry.From.append(currOp.relation)
-
+        qry.froms.append(currOp.relation)
+      elif isinstance(currOp, Grouping):
+        qry.groupcols.extend(currOp.groupcols)
+        qry.groupagg = currOp.aggFunc
 
       currOp = currOp.parent
 
     return qry.sql()
 
   def show(self):
+    """
+    Execute the operations and print results to stdout
+    """
+
+    qry = self.sql()
+
+    print(qry)
+
     with Connection.engine.connect() as con:
-      rs = con.execute(self.sql())
+      rs = con.execute(qry)
 
       for row in rs:
         print(row)

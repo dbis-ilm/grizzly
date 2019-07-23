@@ -32,3 +32,11 @@ class Grouping(SqlOp):
   def __init__(self, groupcols, parent):
     super().__init__(parent)
     self.groupcols = groupcols
+    self.aggFunc = None
+
+  def setAggFunc(self, func):
+    self.aggFunc = func
+
+  def getAggFunc(self):
+    return self.aggFunc
+    

@@ -12,10 +12,18 @@ df = frame.DataFrame2.fromTable("gdeltevents20mio")
 
 print(f"count={df.count('actor2name')}")
 
-print(f"max={df['globaleventid'].max()}")
-print(f"min={df['globaleventid'].min()}")
+# print(f"max={df['globaleventid'].max()}")
+# print(f"min={df['globaleventid'].min()}")
 
-print(f"min_col = {df.min('globaleventid')}")
-# print(df[['userstamp','upi']].sql())
-# print(df['userstamp'].max().sql())
+# print(f"min_col = {df.min('globaleventid')}")
+
+
+g = df.groupby(["year","monthyear"])
+
+g.show()
+a = g.count("actor2geo_type")
+m = g.mean("avgtone")
+
+a.show()
+m.show()
 
