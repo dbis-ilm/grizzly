@@ -1,11 +1,15 @@
+import random
+import string
+
 class Query(object):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.filters = []
     self.projList = []
-    self.froms = []
+    self.froms = ""
     self.groupcols = []
     self.groupagg = None
+    self.joins = []
   
   def sql(self):
     projs = ""
@@ -14,11 +18,9 @@ class Query(object):
     else:
       projs = ','.join(self.projList)
 
-    froms = ",".join(self.froms)
-
     filters = ""
     if self.filters:
-      filters = " WHERE " +  " AND ".join([str(f) for f in self.Filters])
+      filters = " WHERE " +  " AND ".join([str(f) for f in self.filters])
 
     groups = ""
     if self.groupcols:
@@ -31,5 +33,25 @@ class Query(object):
       if self.groupagg:
         projs += f", {self.groupagg}"
 
-    return f"SELECT {projs} FROM {froms} {filters} {groups}"
+
+    joins = ""
+    if self.joins:
+      tupleVars = self.generateTupleVar(len(self.joins))
+      joinsNames = zip(self.joins, tupleVars)
+
+      leftName = self.froms
+      for j,rightName in joinsNames:
+        joins += " "+j.sql(leftName, rightName)
+        leftName = rightName
+
+
+    return f"SELECT {projs} FROM {self.froms} {joins} {filters} {groups}"
   
+
+  def generateTupleVar(self,nums, length = 5):
+    ids = set()
+    while len(ids) < nums:
+      ids.add(''.join(random.choices(string.ascii_uppercase, k=length)))  
+    
+    return ids
+    

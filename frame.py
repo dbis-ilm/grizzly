@@ -1,5 +1,5 @@
 # import sqlalchemy
-from sqlops import From, Filter, Projection, Grouping
+from sqlops import From, Filter, Projection, Grouping, Join
 from column import Column, Eq, Expr
 from connection import Connection
 import query
@@ -38,7 +38,9 @@ class DataFrame2(object):
     return DataFrame2(newColumns, op)
 
 
-  # def join
+  def join(self, other, on, how, comp = "="):
+    self.op = Join(other, on, how, comp, self.op)
+    return DataFrame2(self.columns + other.columns, self.op)
 
   def groupby(self, attrs):
     # self.op = Grouping(attrs, self.op)
@@ -133,10 +135,13 @@ class DataFrame2(object):
       elif isinstance(currOp, Projection):
         qry.projList = currOp.attrs
       elif isinstance(currOp, From):
-        qry.froms.append(currOp.relation)
+        qry.froms= currOp.relation
       elif isinstance(currOp, Grouping):
-        qry.groupcols.extend(currOp.groupcols)
+        fqn = map(lambda x: f"{currOp.name()}.{x}", currOp.groupcols)
+        qry.groupcols.extend(fqn)
         qry.groupagg = currOp.aggFunc
+      elif isinstance(currOp, Join):
+        qry.joins.append(currOp)
 
       currOp = currOp.parent
 
@@ -162,5 +167,5 @@ class DataFrame2(object):
 
   def __eq__(self, other):
     # print(f"eq on {self.columns[0]} and {other}")
-    expr = Eq(self.columns[0], other)
+    expr = Eq(f"{self.op.name()}.{self.columns[0]}", other)
     return expr
