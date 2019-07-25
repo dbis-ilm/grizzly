@@ -1,42 +1,77 @@
 import connection
-import frame
+import grizzly
 
-# connection.Connection.init("pfmegrnargs","reader","NWDMCE5xdipIjRrp","hh-pgsql-public.ebi.ac.uk",5432)
-connection.Connection.init("grizzlytest","grizzly","grizzly","cloud04",54322)
-df = frame.DataFrame2.fromTable("gdeltevents20mio")
+import unittest
 
-print(df.count())
+class DataFrameTest(unittest.TestCase):
 
-df = df[df['globaleventid'] == '468189636']
+  def setUp(self):
+    connection.Connection.init("grizzlytest","grizzly","grizzly","cloud04",54322)    
 
+  def test_selectStar(self):
+    df = grizzly.read_table("gdeltevents20mio")
+    self.assertEqual(df.sql().lower().strip(), "select * from gdeltevents20mio")
 
-df['goldsteinscale'].show()
-
-print(f"count={df.count('actor2name')}")
-
-print(f"max={df['globaleventid'].max()}")
-print(f"min={df['globaleventid'].min()}")
-
-print(f"min_col = {df.min('globaleventid')}")
+  def test_selectCountStar(self):
+    df = grizzly.read_table("gdeltevents20mio")
+    self.assertEqual(df.count(), 6544708)
 
 
-g = df.groupby(["year","monthyear"])
+  def test_selectStarFilter(self):
+    df = grizzly.read_table("gdeltevents20mio") 
+    df = df[df['globaleventid'] == 468189636]
 
-g.show()
-a = g.count("actor2geo_type")
-m = g.mean("avgtone")
-
-a.show()
-m.show()
-
-df2 = frame.DataFrame2.fromTable("miotest")
-df3 = frame.DataFrame2.fromTable("miotest")
-joined = df.join(other = df2, on=["globaleventid", "globaleventid"], how = "inner").join(other=df3, on=["actor2name", "actor2name"], how = "inner")
+    self.assertEqual(df.sql().lower().strip(), "select * from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636")
 
 
+  def test_selectStarFilterString(self):
+    df = grizzly.read_table("gdeltevents20mio") 
+    df = df[df['globaleventid'] == 'abc']
 
-print(joined.count())
+    self.assertEqual(df.sql().lower().strip(), "select * from gdeltevents20mio   where gdeltevents20mio.globaleventid = 'abc'")
 
-g2 = joined[joined['globaleventid'] == '468189636']
+  def test_selectColumnWithFilter(self):
+    df = grizzly.read_table("gdeltevents20mio") 
+    df = df[df['globaleventid'] == 468189636]
+    df = df['goldsteinscale']
 
-g2.show()
+    self.assertEqual(df.sql().lower().strip(), "select goldsteinscale from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636")
+
+  def test_selectCountCol(self):
+    df = grizzly.read_table("gdeltevents20mio")
+    cnt = df.count('actor2name')
+    self.assertGreater(cnt, 0)
+
+  def test_selectStarGroupBy(self):
+    df = grizzly.read_table("gdeltevents20mio") 
+    df = df[df['globaleventid'] == '468189636']
+    g = df.groupby(["year","monthyear"])
+
+    self.assertEqual(g.sql().lower().strip(), "select gdeltevents20mio.year, gdeltevents20mio.monthyear from gdeltevents20mio   where gdeltevents20mio.globaleventid = '468189636'  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
+
+  def test_groupByWithAggTwice(self):
+    df = grizzly.read_table("gdeltevents20mio") 
+    df = df[df['globaleventid'] == 468189636]
+    g = df.groupby(["year","monthyear"])
+
+    a = g.count("actor2geo_type")
+
+    self.assertEqual(a.sql().lower().strip(), "select gdeltevents20mio.year, gdeltevents20mio.monthyear, count(actor2geo_type) from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
+
+
+    m = g.mean("avgtone")
+    self.assertEqual(m.sql().lower(), "select gdeltevents20mio.year, gdeltevents20mio.monthyear, avg(avgtone) from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
+
+  def test_joinTest(self):
+    df = grizzly.read_table("gdeltevents20mio") 
+    df = df[df['globaleventid'] == 468189636]
+
+    df2 = grizzly.read_table("miotest")
+    
+    joined = df.join(other = df2, on=["globaleventid", "globaleventid"], how = "inner")
+
+    self.assertGreater(joined.count(), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

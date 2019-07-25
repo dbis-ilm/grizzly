@@ -5,16 +5,6 @@ from connection import Connection
 import query
 
 class DataFrame2(object):
-  @staticmethod
-  def fromTable(tableName):
-    # self.tableName = tableName
-    # table = sqlalchemy.Table(tableName, Connection.md, autoload=True, autoload_with=Connection.engine)
-    
-    columns = []
-    # for c in table.columns:
-    #     columns.append(Column(tableName, c.name, c.type, table))
-
-    return DataFrame2(columns, From(tableName))
 
   def __init__(self, columns, op):
     self.op = op
