@@ -87,7 +87,15 @@ class DataFrame2(object):
 
 
   def _execAgg(self, func, col):
+    """
+    Actually compute the aggregation function.
 
+    If we have a GROUP BY operation, the aggregation is only stored
+    as a transformation and needs to be executed using show() or similar.
+
+    If no grouping exists, we want to compute the aggregate over the complete
+    table and return the scalar result directly
+    """
     colName = None
     if col is None:
       colName = self.columns[0]
@@ -107,15 +115,26 @@ class DataFrame2(object):
     
 
   def _doExecAgg(self, funcCode):
+    """
+    Really executes the aggregation and returns the single result
+    """
+
+    # aggregation over a table is performed in a way that the actual query
+    # that was built is executed as an inner query and around that, we 
+    # compute the aggregation
     innerSQL = self.sql()
     aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
     
+    # execute an SQL query and get the result set
     rs = self._doExecQuery(aggSQL)
     #fetch first (and only) row, return first column only
     return rs.fetchone()[0] 
 
 
   def _doExecQuery(self, qry):
+    """
+    Execute an arbitrary SQL query and return the result set
+    """
     with Connection.engine.connect() as con:
       rs = con.execute(qry)
       return rs
@@ -125,8 +144,10 @@ class DataFrame2(object):
     Produce a SQL string from the current operator tree
     """
 
+    # the query object
     qry = query.Query()
 
+    # traverse the "query plan" and fill the query object
     currOp = self.op
     while currOp != None:
       
@@ -145,6 +166,7 @@ class DataFrame2(object):
 
       currOp = currOp.parent
 
+    # let the query object produce the actual SQL
     return qry.sql()
 
   def show(self):
