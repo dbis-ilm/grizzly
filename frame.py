@@ -27,6 +27,9 @@ class DataFrame2(object):
 
     return DataFrame2(newColumns, op)
 
+  def distinct(self):
+    newOp = Projection(None, self.op, distinct = True)
+    return DataFrame2(self.columns, newOp)
 
   def join(self, other, on, how, comp = "="):
     self.op = Join(other, on, how, comp, self.op)
@@ -129,6 +132,7 @@ class DataFrame2(object):
       rs = con.execute(qry)
       return rs
 
+### produce SQL string
   def sql(self):
     """
     Produce a SQL string from the current operator tree
@@ -145,6 +149,8 @@ class DataFrame2(object):
         qry.filters.append(currOp)
       elif isinstance(currOp, Projection):
         qry.projList = currOp.attrs
+        if currOp.distinct:
+          qry.distinct = "distinct"
       elif isinstance(currOp, From):
         qry.froms= currOp.relation
       elif isinstance(currOp, Grouping):
@@ -159,6 +165,7 @@ class DataFrame2(object):
     # let the query object produce the actual SQL
     return qry.sql()
 
+### Run query and print results
   def show(self):
     """
     Execute the operations and print results to stdout
@@ -175,7 +182,7 @@ class DataFrame2(object):
         print(row)
 
 ################
-# comparisons
+### comparisons
 
   def __eq__(self, other):
     # print(f"eq on {self.columns[0]} and {other}")

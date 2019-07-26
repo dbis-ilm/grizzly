@@ -32,9 +32,10 @@ class Projection(SqlOp):
   """
   Projection to column names
   """
-  def __init__(self, attrs, parent):
+  def __init__(self, attrs, parent, distinct = False):
     super().__init__(parent)
     self.attrs = attrs
+    self.distinct = distinct
 
 
 class Grouping(SqlOp):

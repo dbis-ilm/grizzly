@@ -13,6 +13,7 @@ class Query(object):
     self.groupcols = []
     self.groupagg = None
     self.joins = []
+    self.distinct = ""
   
   def sql(self):
     """
@@ -61,7 +62,7 @@ class Query(object):
 
 
     # we always have SELECT ... FROM. Everything else is optional
-    return f"SELECT {projs} FROM {self.froms} {joins} {filters} {groups}"
+    return f"SELECT {self.distinct} {projs} FROM {self.froms} {joins} {filters} {groups}"
   
 
   # create random but unique strings to be used as tuple vars.

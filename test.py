@@ -9,8 +9,8 @@ class DataFrameTest(unittest.TestCase):
     connection.Connection.init("grizzlytest","grizzly","grizzly","cloud04",54322)    
 
   def test_selectStar(self):
-    df = grizzly.read_table("gdeltevents20mio")
-    self.assertEqual(df.sql().lower().strip(), "select * from gdeltevents20mio")
+    df = grizzly.read_table("gdeltevents20mio") 
+    self.assertEqual(df.sql().lower().strip(), "select  * from gdeltevents20mio")
 
   def test_selectCountStar(self):
     df = grizzly.read_table("gdeltevents20mio")
@@ -21,21 +21,21 @@ class DataFrameTest(unittest.TestCase):
     df = grizzly.read_table("gdeltevents20mio") 
     df = df[df['globaleventid'] == 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select * from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636")
 
 
   def test_selectStarFilterString(self):
     df = grizzly.read_table("gdeltevents20mio") 
     df = df[df['globaleventid'] == 'abc']
 
-    self.assertEqual(df.sql().lower().strip(), "select * from gdeltevents20mio   where gdeltevents20mio.globaleventid = 'abc'")
+    self.assertEqual(df.sql().lower().strip(), "select  * from gdeltevents20mio   where gdeltevents20mio.globaleventid = 'abc'")
 
   def test_selectColumnWithFilter(self):
     df = grizzly.read_table("gdeltevents20mio") 
     df = df[df['globaleventid'] == 468189636]
     df = df['goldsteinscale']
 
-    self.assertEqual(df.sql().lower().strip(), "select goldsteinscale from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  goldsteinscale from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636")
 
   def test_selectCountCol(self):
     df = grizzly.read_table("gdeltevents20mio")
@@ -47,7 +47,7 @@ class DataFrameTest(unittest.TestCase):
     df = df[df['globaleventid'] == '468189636']
     g = df.groupby(["year","monthyear"])
 
-    self.assertEqual(g.sql().lower().strip(), "select gdeltevents20mio.year, gdeltevents20mio.monthyear from gdeltevents20mio   where gdeltevents20mio.globaleventid = '468189636'  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
+    self.assertEqual(g.sql().lower().strip(), "select  gdeltevents20mio.year, gdeltevents20mio.monthyear from gdeltevents20mio   where gdeltevents20mio.globaleventid = '468189636'  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
 
   def test_groupByWithAggTwice(self):
     df = grizzly.read_table("gdeltevents20mio") 
@@ -56,11 +56,11 @@ class DataFrameTest(unittest.TestCase):
 
     a = g.count("actor2geo_type")
 
-    self.assertEqual(a.sql().lower().strip(), "select gdeltevents20mio.year, gdeltevents20mio.monthyear, count(actor2geo_type) from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
+    self.assertEqual(a.sql().lower().strip(), "select  gdeltevents20mio.year, gdeltevents20mio.monthyear, count(actor2geo_type) from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
 
 
     m = g.mean("avgtone")
-    self.assertEqual(m.sql().lower(), "select gdeltevents20mio.year, gdeltevents20mio.monthyear, avg(avgtone) from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
+    self.assertEqual(m.sql().lower(), "select  gdeltevents20mio.year, gdeltevents20mio.monthyear, avg(avgtone) from gdeltevents20mio   where gdeltevents20mio.globaleventid = 468189636  group by gdeltevents20mio.year, gdeltevents20mio.monthyear")
 
   def test_joinTest(self):
     df = grizzly.read_table("gdeltevents20mio") 
@@ -72,6 +72,14 @@ class DataFrameTest(unittest.TestCase):
 
     self.assertGreater(joined.count(), 0)
 
+  def test_Distinct(self):
+    df = grizzly.read_table("gdeltevents20mio")
+    self.assertEqual(df['isrootevent'].distinct().sql().lower().strip(), "select distinct isrootevent from gdeltevents20mio")
+
+  def test_Distinct(self):
+    df = grizzly.read_table("gdeltevents20mio")
+    self.assertEqual(df[['y',"x"]].distinct().sql().lower().strip(), "select distinct y,x from gdeltevents20mio")
+    # print(df[['y',"x"]].distinct().sql().lower().strip())
 
 if __name__ == "__main__":
     unittest.main()
