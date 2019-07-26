@@ -72,12 +72,6 @@ class DataFrameTest(unittest.TestCase):
 
     self.assertGreater(joined.count(), 0)
 
-  def test_Fail(self):
-    """
-    Intendet to fail for test reasons
-    """
-    self.assertTrue(False)
-
 
 if __name__ == "__main__":
     unittest.main()
