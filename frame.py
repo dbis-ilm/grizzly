@@ -121,7 +121,7 @@ class DataFrame2(object):
     # execute an SQL query and get the result set
     rs = self._doExecQuery(aggSQL)
     #fetch first (and only) row, return first column only
-    return rs.fetchone()[0] 
+    return rs.scalar()
 
 
   def _doExecQuery(self, qry):
@@ -183,7 +183,6 @@ class DataFrame2(object):
 
 ################
 ### comparisons
-
   def __eq__(self, other):
     # print(f"eq on {self.columns[0]} and {other}")
     expr = Eq(f"{self.op.name()}.{self.columns[0]}", other)
