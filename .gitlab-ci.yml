@@ -20,10 +20,10 @@ cache:
 
 before_script:
   - python -V  # Print out python version for debugging
-  - pip install virtualenv
+  #- pip install virtualenv
   - pip install sqlalchemy
-  - virtualenv venv
-  - source venv/bin/activate
+  #- virtualenv venv
+  #- source venv/bin/activate
 
 test:
   script:
