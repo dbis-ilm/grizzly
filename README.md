@@ -1,6 +1,5 @@
 [![Testing](https://dbgit.prakinf.tu-ilmenau.de/code/grizzly/badges/master/pipeline.svg)](https://dbgit.prakinf.tu-ilmenau.de/code/grizzly/commits/master)
-
-
+[![coverage report](https://dbgit.prakinf.tu-ilmenau.de/code/grizzly/badges/master/coverage.svg)](https://dbgit.prakinf.tu-ilmenau.de/code/grizzly/commits/master)
 
 # Grizzly
 
