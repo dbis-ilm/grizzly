@@ -26,6 +26,8 @@ before_script:
   #- source venv/bin/activate
 
 test:
+  tags: 
+    - grouprunner
   script:
     #python -m unittest
     pytest --cov=. test.py
