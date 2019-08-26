@@ -66,7 +66,7 @@ class DataFrameTest(unittest.TestCase):
     df = grizzly.read_table("gdeltevents20mio") 
     df = df[df['globaleventid'] == 468189636]
 
-    df2 = grizzly.read_table("miotest")
+    df2 = grizzly.read_table("gdeltevents20mio")
     
     joined = df.join(other = df2, on=["globaleventid", "globaleventid"], how = "inner")
 
