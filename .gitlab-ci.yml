@@ -21,17 +21,20 @@ cache:
 before_script:
   - python -V  # Print out python version for debugging
   #- pip install virtualenv
-  - pip install sqlalchemy psycopg2
-  
+  - pip install sqlalchemy psycopg2 pytest-coverage
   #- virtualenv venv
   #- source venv/bin/activate
 
 test:
+  tags: 
+    - grouprunner
   script:
-    python -m unittest
+    #python -m unittest
+    pytest --cov=. test.py
     #- python setup.py test
     #- pip install tox flake8  # you can also use tox
     #- tox -e py36,flake8
+    
 
 #run:
 #  script:
