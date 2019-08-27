@@ -1,8 +1,8 @@
-# import sqlalchemy
 from sqlops import From, Filter, Projection, Grouping, Join
-from column import Column, Eq, Expr
+from column import Expr, Eq, Ne, Gt, Ge, Lt, Le
 from connection import Connection
 import query
+
 
 class DataFrame2(object):
 
@@ -186,4 +186,25 @@ class DataFrame2(object):
   def __eq__(self, other):
     # print(f"eq on {self.columns[0]} and {other}")
     expr = Eq(f"{self.op.name()}.{self.columns[0]}", other)
+    return expr
+
+
+  def __gt__(self, other):
+    expr = Gt(f"{self.op.name()}.{self.columns[0]}", other)
+    return expr
+
+  def __lt__(self, other):
+    expr = Lt(f"{self.op.name()}.{self.columns[0]}", other)
+    return expr
+
+  def __ge__(self, other):
+    expr = Ge(f"{self.op.name()}.{self.columns[0]}", other)
+    return expr
+  
+  def __le__(self, other):
+    expr = Le(f"{self.op.name()}.{self.columns[0]}", other)
+    return expr
+
+  def __ne__(self, other):
+    expr = Ne(f"{self.op.name()}.{self.columns[0]}", other)
     return expr

@@ -20,14 +20,11 @@ class Column(object):
         return self.fqn()
 
 class Expr(object):
-  def __init__(self):
-    return super().__init__()
-
-class Eq(Expr):
-  def __init__(self, left, right):
+  def __init__(self, left, right, opStr):
     super().__init__()
     self.left = left
     self.right = right
+    self.opStr = opStr
 
   def __str__(self):
     rightSQLRep = ""
@@ -36,4 +33,32 @@ class Eq(Expr):
     else:
       rightSQLRep = self.right
 
-    return f"{self.left} = {rightSQLRep}"
+    return f"{self.left} {self.opStr} {rightSQLRep}"
+
+class Eq(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, "=")
+    
+class Ne(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, "<>")
+  
+
+class Gt(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, ">")
+
+class Ge(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, ">=")
+
+class Lt(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, "<")
+
+class Le(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, "<=")
+    
+
+  

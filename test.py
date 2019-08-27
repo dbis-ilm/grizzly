@@ -85,5 +85,41 @@ class DataFrameTest(unittest.TestCase):
     self.assertEqual(df[['y',"x"]].distinct().sql().lower().strip(), "select distinct y,x from miotest_0_01gb")
     # print(df[['y',"x"]].distinct().sql().lower().strip())
 
+  def test_Eq(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+    df = df[df['globaleventid'] == 468189636]
+
+    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid = 468189636")
+
+  def test_Ne(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+    df = df[df['globaleventid'] != 468189636]
+
+    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid <> 468189636")
+
+  def test_Lt(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+    df = df[df['globaleventid'] < 468189636]
+
+    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid < 468189636")
+
+  def test_Le(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+    df = df[df['globaleventid'] <= 468189636]
+
+    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid <= 468189636")
+
+  def test_Gt(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+    df = df[df['globaleventid'] > 468189636]
+
+    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid > 468189636")
+
+  def test_Ge(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+    df = df[df['globaleventid'] >= 468189636]
+
+    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid >= 468189636")
+
 if __name__ == "__main__":
     unittest.main()
