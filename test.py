@@ -1,11 +1,12 @@
 import connection
 import grizzly
 
+from codematcher import CodeMatcher
 import unittest
 import sqlite3
 
 
-class DataFrameTest(unittest.TestCase):
+class DataFrameTest(CodeMatcher):
 
   def setUp(self):
     connection.Connection.init("sqlite:///grizzly.db")
@@ -75,6 +76,17 @@ class DataFrameTest(unittest.TestCase):
     joined = df.join(other = df2, on=["globaleventid", "globaleventid"], how = "inner")
 
     self.assertGreater(joined.count(), 0)
+
+  def test_complexJoin(self):
+    df1 = grizzly.read_table("t1")
+    df2 = grizzly.read_table("t2")
+
+    j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']), how="left outer")
+
+    expected = "SELECT  * FROM t1  LEFT OUTER JOIN (SELECT  * FROM t2   ) $t1 ON (t1.a = $t1.b) AND (t1.c <= $t1.d)"
+    
+    self.matchSnipped(j.sql(), expected)
+
 
   def test_Distinct(self):
     df = grizzly.read_table("miotest_0_01gb")

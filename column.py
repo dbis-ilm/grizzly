@@ -1,3 +1,5 @@
+import frame
+
 class Column(object):
     def __init__(self, relation, name, dtype,   table):
         self.relation = relation
@@ -28,12 +30,24 @@ class Expr(object):
 
   def __str__(self):
     rightSQLRep = ""
+    
     if isinstance(self.right, str):
       rightSQLRep = f"'{self.right}'"
+    elif isinstance(self.right, frame.DataFrame2):
+      rightSQLRep = f"__RIGHTNAME__.{self.right.columns[0]}"
     else:
       rightSQLRep = self.right
 
     return f"{self.left} {self.opStr} {rightSQLRep}"
+
+  def __and__(self, other):
+    expr = And(self, other)
+    return expr
+
+  def __or__(self, other):
+    expr = Or(self, other)
+    return expr
+    
 
 class Eq(Expr):
   def __init__(self, left, right):
@@ -61,4 +75,16 @@ class Le(Expr):
     super().__init__(left, right, "<=")
     
 
-  
+class And(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, "and")
+
+  def __str__(self):
+    return f"({self.left}) AND ({self.right})"
+
+class Or(Expr):
+  def __init__(self, left, right):
+    super().__init__(left, right, "or")
+
+  def __str__(self):
+    return f"{self.left} OR {self.right}"

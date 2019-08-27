@@ -3,11 +3,8 @@
 # Edit at https://www.gitignore.io/?templates=code,python
 
 ### Code ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+#
+.vscode
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

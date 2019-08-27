@@ -1,5 +1,5 @@
 from sqlops import From, Filter, Projection, Grouping, Join
-from column import Expr, Eq, Ne, Gt, Ge, Lt, Le
+from column import Expr, Eq, Ne, Gt, Ge, Lt, Le, And, Or
 from connection import Connection
 import query
 

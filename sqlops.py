@@ -1,3 +1,5 @@
+from column import Expr
+
 class SqlOp(object):
   def __init__(self, parent, name = None):
     self.parent = parent
@@ -55,6 +57,7 @@ class Grouping(SqlOp):
     
 class Join(SqlOp):
   def __init__(self, otherDF, on, how, comp, parent):
+    # assert len(on) == 2
     super().__init__(parent)
     self.otherDF = otherDF
     self.on = on
@@ -63,4 +66,11 @@ class Join(SqlOp):
 
   def sql(self, leftName, rightName):
     innerSQL = self.otherDF.sql()
-    return f"{self.how.upper()} JOIN ({innerSQL}) {rightName} ON {leftName}.{self.on[0]} {self.comp} {rightName}.{self.on[1]}"
+
+    onClause = ""
+    if isinstance(self.on, Expr):
+      onClause = str(self.on).replace("__RIGHTNAME__",rightName)
+    else:
+      onClause = f"{leftName}.{self.on[0]} {self.comp} {rightName}.{self.on[1]}"
+
+    return f"{self.how.upper()} JOIN ({innerSQL}) {rightName} ON {onClause}"
