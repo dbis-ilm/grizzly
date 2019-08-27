@@ -39,7 +39,7 @@ class DataFrame2(object):
     # self.op = Grouping(attrs, self.op)
     # return self
     self.op = Grouping(attrs, self.op )
-    return DataFrame2(self.columns,  self.op)
+    return DataFrame2(attrs,  self.op)
 
   def __getitem__(self, key):
     theType = type(key)
