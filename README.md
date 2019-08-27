@@ -19,13 +19,17 @@ Grizzly uses
 
 ### Connection
 Connect to your database using an appropriate connection string:
-```python 
-    connection.Connection.init("sqlite:///grizzly.db")
+```python
+    import sqlite3
+    con = sqlite3.connect("grizzly.db")
 ```
 Now, reference the table(s) you want to work with:
 ```python
-    df = grizzly.read_table("events")
+    df = grizzly.read_table("events", con)
 ```
+
+The connection can also be set globally in the `connection.Connection.db` field.
+
 Here, `df` is just a reference, it contains no data from your table.
 To show its contents, use the `show` method:
 ```python
