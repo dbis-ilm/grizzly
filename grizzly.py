@@ -1,4 +1,4 @@
-from frame import DataFrame2
+from frame import DataFrame
 from sqlops import From
 from connection import Connection
 
@@ -11,4 +11,4 @@ def read_table(tableName, connection = None):
   # for c in table.columns:
   #     columns.append(Column(tableName, c.name, c.type, table))
 
-  return DataFrame2(columns, From(tableName))
+  return DataFrame(columns, From(tableName))

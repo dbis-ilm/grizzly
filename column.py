@@ -33,7 +33,7 @@ class Expr(object):
     
     if isinstance(self.right, str):
       rightSQLRep = f"'{self.right}'"
-    elif isinstance(self.right, frame.DataFrame2):
+    elif isinstance(self.right, frame.DataFrame):
       rightSQLRep = f"__RIGHTNAME__.{self.right.columns[0]}"
     else:
       rightSQLRep = self.right

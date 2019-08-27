@@ -4,7 +4,7 @@ from connection import Connection
 import query
 
 
-class DataFrame2(object):
+class DataFrame(object):
 
   def __init__(self, columns, op):
     self.op = op
@@ -25,21 +25,21 @@ class DataFrame2(object):
     op = Projection(attrs, self.op)
     newColumns = attrs #[col for col in self.columns if col.name in attrs]
 
-    return DataFrame2(newColumns, op)
+    return DataFrame(newColumns, op)
 
   def distinct(self):
     newOp = Projection(None, self.op, distinct = True)
-    return DataFrame2(self.columns, newOp)
+    return DataFrame(self.columns, newOp)
 
   def join(self, other, on, how, comp = "="):
     self.op = Join(other, on, how, comp, self.op)
-    return DataFrame2(self.columns + other.columns, self.op)
+    return DataFrame(self.columns + other.columns, self.op)
 
   def groupby(self, attrs):
     # self.op = Grouping(attrs, self.op)
     # return self
     self.op = Grouping(attrs, self.op )
-    return DataFrame2(attrs,  self.op)
+    return DataFrame(attrs,  self.op)
 
   def __getitem__(self, key):
     theType = type(key)
@@ -101,7 +101,7 @@ class DataFrame2(object):
       newOp = Grouping(self.op.groupcols, self.op.parent)
       newOp.setAggFunc(funcCode)
       
-      return DataFrame2(self.columns, newOp)
+      return DataFrame(self.columns, newOp)
       
     else:
       return self._doExecAgg(funcCode)
