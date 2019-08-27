@@ -121,16 +121,15 @@ class DataFrame2(object):
     # execute an SQL query and get the result set
     rs = self._doExecQuery(aggSQL)
     #fetch first (and only) row, return first column only
-    return rs.scalar()
+    return rs.fetchone()[0]
 
 
   def _doExecQuery(self, qry):
     """
     Execute an arbitrary SQL query and return the result set
     """
-    with Connection.engine.connect() as con:
-      rs = con.execute(qry)
-      return rs
+    rs = Connection.db.execute(qry)
+    return rs
 
 ### produce SQL string
   def sql(self):
@@ -175,11 +174,10 @@ class DataFrame2(object):
 
     print(qry)
 
-    with Connection.engine.connect() as con:
-      rs = con.execute(qry)
+    rs = Connection.db.execute(qry)
 
-      for row in rs:
-        print(row)
+    for row in rs:
+      print(row)
 
 ################
 ### comparisons

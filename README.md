@@ -12,7 +12,6 @@ This way, you don't have to care about Out-of-Memory problems, un-optimized quer
 ## Dependencies
 Grizzly uses
   - Python 3
-  - [sqlalchemy](https://github.com/sqlalchemy/sqlalchemy)
   - [SQLite3](https://docs.python.org/2/library/sqlite3.html) (currently for tests only)
 
 

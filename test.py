@@ -9,9 +9,11 @@ import sqlite3
 class DataFrameTest(CodeMatcher):
 
   def setUp(self):
-    connection.Connection.init("sqlite:///grizzly.db")
+    # ("sqlite:///grizzly.db")
+    connection.Connection.db = sqlite3.connect("grizzly.db")
 
-    
+  def tearDown(self):
+    connection.Connection.db.close()
 
   def test_selectStar(self):
     df = grizzly.read_table("miotest_0_01gb") 
