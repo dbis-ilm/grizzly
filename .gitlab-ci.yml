@@ -21,7 +21,7 @@ cache:
 before_script:
   - python -V  # Print out python version for debugging
   #- pip install virtualenv
-  - pip install sqlalchemy psycopg2 pytest-coverage
+  - pip install sqlalchemy psycopg2 pytest-coverage beautifultable
   #- virtualenv venv
   #- source venv/bin/activate
 
