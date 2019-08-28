@@ -149,7 +149,9 @@ class DataFrameTest(CodeMatcher):
 
       df.show()
 
-      output = mystdout.getvalue()
+      output = mystdout.getvalue().splitlines()
+
+      self.assertEqual(len(output), 2842+1) #+1 for column names
 
     finally:
       sys.stdout = bkp
@@ -167,7 +169,15 @@ class DataFrameTest(CodeMatcher):
       bkp = sys.stdout
       sys.stdout = mystdout = StringIO()
       
-      df.show(pretty=True, maxColWidth = 40)
+      maxColWidth = 40
+
+      df.show(pretty=True, maxColWidth = maxColWidth)
+
+      output = mystdout.getvalue().splitlines()
+
+      for row in output:
+        for col in row:
+          self.assertLessEqual(len(col), maxColWidth)
 
     finally:
       sys.stdout = bkp
