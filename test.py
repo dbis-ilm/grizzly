@@ -135,5 +135,37 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid >= 468189636")
 
+  # def test_show(self):
+  #   df = grizzly.read_table("miotest_0_01gb") 
+
+  #   df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
+  #   df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+
+  #   df.show()
+
+  # def test_showPretty(self):
+  #   df = grizzly.read_table("miotest_0_01gb") 
+
+  #   df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
+  #   df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+
+  #   df.show(pretty=True, maxColWidth = 40)
+
+  def test_toString(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+
+    df = df[df['globaleventid'] == 467268277]
+    df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+
+    strDF = str(df).split("\n")
+
+    rows = df.count()
+
+    self.assertEqual(len(strDF), rows + 3) # column names + top rule + bottom rule
+
+
+
+
+
 if __name__ == "__main__":
     unittest.main()

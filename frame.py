@@ -3,6 +3,7 @@ from column import Expr, Eq, Ne, Gt, Ge, Lt, Le, And, Or
 from connection import Connection
 import query
 
+# from beautifultable import BeautifulTable
 
 class DataFrame(object):
 
@@ -165,19 +166,64 @@ class DataFrame(object):
     return qry.sql()
 
 ### Run query and print results
-  def show(self):
+  def show(self, delim = ",",pretty=False, maxColWidth=20):
     """
     Execute the operations and print results to stdout
+
+    Non-pretty mode outputs in CSV style -- the delim parameter can be used to 
+    set the delimiter. Non-pretty mode ignores the maxColWidth parameter.
     """
 
-    qry = self.sql()
+    rs = self._doExecQuery(self.sql())
+    cols = [dec[0] for dec in rs.description]
+    
 
-    print(qry)
+    if not pretty:
+      print(delim.join(cols))
+      for row in rs:
+        print(delim.join([str(col) for col in row]))
+    else:
+      firstRow = rs.fetchone()
 
-    rs = Connection.db.execute(qry)
+      colWidths = [ min(maxColWidth, max(len(x),len(str(y)))) for x,y in zip(cols, firstRow)]
 
+      rowFormat = "|".join([ "{:^"+str(width+2)+"}" for width in colWidths])
+      
+
+      # print(rowFormat.format(*cols))
+      def printRow(theRow):
+        values = []
+        for col, colWidth in zip(theRow, colWidths):
+          strCol = str(col)
+          if len(strCol) > colWidth:
+            values.append(strCol[:(colWidth-3)]+"...")
+          else:
+            values.append(strCol)
+
+        print(rowFormat.format(*values))
+
+      printRow(cols)
+      printRow(firstRow)
+      for row in rs:
+        printRow(row)
+
+    rs.close()
+
+  def __str__(self):
+    from beautifultable import BeautifulTable
+
+    table = BeautifulTable()
+
+    rs = self._doExecQuery(self.sql())
+  
     for row in rs:
-      print(row)
+      table.append_row(row)
+
+
+    rs.close()
+
+    return str(table)
+
 
 ################
 ### comparisons
