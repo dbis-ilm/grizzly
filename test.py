@@ -135,21 +135,42 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid >= 468189636")
 
-  # def test_show(self):
-  #   df = grizzly.read_table("miotest_0_01gb") 
+  def test_show(self):
+    df = grizzly.read_table("miotest_0_01gb") 
 
-  #   df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
-  #   df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+    df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
+    df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
 
-  #   df.show()
+    from io import StringIO
+    import sys
+    try:
+      bkp = sys.stdout
+      sys.stdout = mystdout = StringIO()
 
-  # def test_showPretty(self):
-  #   df = grizzly.read_table("miotest_0_01gb") 
+      df.show()
 
-  #   df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
-  #   df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+      output = mystdout.getvalue()
 
-  #   df.show(pretty=True, maxColWidth = 40)
+    finally:
+      sys.stdout = bkp
+
+
+  def test_showPretty(self):
+    df = grizzly.read_table("miotest_0_01gb") 
+
+    df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
+    df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+
+    from io import StringIO
+    import sys
+    try:
+      bkp = sys.stdout
+      sys.stdout = mystdout = StringIO()
+      
+      df.show(pretty=True, maxColWidth = 40)
+
+    finally:
+      sys.stdout = bkp
 
   def test_toString(self):
     df = grizzly.read_table("miotest_0_01gb") 
