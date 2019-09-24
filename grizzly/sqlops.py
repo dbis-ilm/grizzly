@@ -1,4 +1,4 @@
-from column import Expr
+from .column import Expr
 
 class SqlOp(object):
   def __init__(self, parent, name = None):

@@ -1,4 +1,4 @@
-import frame
+from . import frame
 
 class Expr(object):
   def __init__(self, left, right, opStr):

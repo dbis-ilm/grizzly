@@ -1,6 +1,7 @@
-from frame import DataFrame
-from sqlops import From
-from connection import Connection
+from grizzly.frame import DataFrame
+from grizzly.sqlops import From
+from grizzly.connection import Connection
+
 
 def read_table(tableName, connection = None):
   

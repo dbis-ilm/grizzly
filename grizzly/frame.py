@@ -1,7 +1,7 @@
-from sqlops import From, Filter, Projection, Grouping, Join
-from column import Expr, Eq, Ne, Gt, Ge, Lt, Le, And, Or
-from connection import Connection
-import query
+from .sqlops import From, Filter, Projection, Grouping, Join
+from .column import Expr, Eq, Ne, Gt, Ge, Lt, Le, And, Or
+from .query import Query
+from .connection import Connection
 
 # from beautifultable import BeautifulTable
 
@@ -139,7 +139,7 @@ class DataFrame(object):
     """
 
     # the query object
-    qry = query.Query()
+    qry = Query()
 
     # traverse the "query plan" and fill the query object
     currOp = self.op
