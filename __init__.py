@@ -4,7 +4,7 @@ from connection import Connection
 
 def read_table(tableName, connection = None):
   
-  if connection is not None and Connection.db is not None:
+  if connection is not None and Connection.db is None:
     Connection.db = connection
 
   columns = []

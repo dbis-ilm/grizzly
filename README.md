@@ -3,11 +3,17 @@
 
 # Grizzly
 
-Grizzly is a transpiler for a Pandas-like Python-API to SQL to move computations from the client into a database system.
+Grizzly is a transpiler from a Python-API to SQL to move computations from the client into a database system.
 
 Grizzly implements its own `DataFrame` structure that tracks operations, like projection, filter, joins, ...
 Only when the result of the sequence of operations is needed, a SQL string is produced, resembling all those operations, and sent to a DBMS.
 This way, you don't have to care about Out-of-Memory problems, un-optimized queries, and high CPU load.
+
+## Installation
+Grizzly is available on PyPi: https://pypi.org/project/grizzly-sql/0.1/
+```
+pip3 install --user grizzly-sql
+```
 
 ## Dependencies
 Grizzly uses
