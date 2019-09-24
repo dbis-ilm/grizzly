@@ -16,64 +16,64 @@ class DataFrameTest(CodeMatcher):
     connection.Connection.db.close()
 
   def test_selectStar(self):
-    df = grizzly.read_table("miotest_0_01gb") 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb")
+    df = grizzly.read_table("events") 
+    self.assertEqual(df.sql().lower().strip(), "select  * from events")
 
   def test_selectCountStar(self):
-    df = grizzly.read_table("miotest_0_01gb")
+    df = grizzly.read_table("events")
     self.assertEqual(df.count(), 30354)
 
 
   def test_selectStarFilter(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid = 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid = 468189636")
 
 
   def test_selectStarFilterString(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 'abc']
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid = 'abc'")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid = 'abc'")
 
   def test_selectColumnWithFilter(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 468189636]
     df = df['goldsteinscale']
 
-    self.assertEqual(df.sql().lower().strip(), "select  goldsteinscale from miotest_0_01gb   where miotest_0_01gb.globaleventid = 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  goldsteinscale from events   where events.globaleventid = 468189636")
 
   def test_selectCountCol(self):
-    df = grizzly.read_table("miotest_0_01gb")
+    df = grizzly.read_table("events")
     cnt = df.count('actor2name')
     self.assertGreater(cnt, 0)
 
   def test_selectStarGroupBy(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == '468189636']
     g = df.groupby(["year","monthyear"])
 
-    self.assertEqual(g.sql().lower().strip(), "select  miotest_0_01gb.year, miotest_0_01gb.monthyear from miotest_0_01gb   where miotest_0_01gb.globaleventid = '468189636'  group by miotest_0_01gb.year, miotest_0_01gb.monthyear")
+    self.assertEqual(g.sql().lower().strip(), "select  events.year, events.monthyear from events   where events.globaleventid = '468189636'  group by events.year, events.monthyear")
 
   def test_groupByWithAggTwice(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 468189636]
     g = df.groupby(["year","monthyear"])
 
     a = g.count("actor2geo_type")
 
-    self.assertEqual(a.sql().lower().strip(), "select  miotest_0_01gb.year, miotest_0_01gb.monthyear, count(actor2geo_type) from miotest_0_01gb   where miotest_0_01gb.globaleventid = 468189636  group by miotest_0_01gb.year, miotest_0_01gb.monthyear")
+    self.assertEqual(a.sql().lower().strip(), "select  events.year, events.monthyear, count(actor2geo_type) from events   where events.globaleventid = 468189636  group by events.year, events.monthyear")
 
 
     m = g.mean("avgtone")
-    self.assertEqual(m.sql().lower(), "select  miotest_0_01gb.year, miotest_0_01gb.monthyear, avg(avgtone) from miotest_0_01gb   where miotest_0_01gb.globaleventid = 468189636  group by miotest_0_01gb.year, miotest_0_01gb.monthyear")
+    self.assertEqual(m.sql().lower(), "select  events.year, events.monthyear, avg(avgtone) from events   where events.globaleventid = 468189636  group by events.year, events.monthyear")
 
   def test_joinTest(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 470259271]
 
-    df2 = grizzly.read_table("miotest_0_01gb")
+    df2 = grizzly.read_table("events")
     
     joined = df.join(other = df2, on=["globaleventid", "globaleventid"], how = "inner")
 
@@ -91,52 +91,52 @@ class DataFrameTest(CodeMatcher):
 
 
   def test_Distinct(self):
-    df = grizzly.read_table("miotest_0_01gb")
-    self.assertEqual(df['isrootevent'].distinct().sql().lower().strip(), "select distinct isrootevent from miotest_0_01gb")
+    df = grizzly.read_table("events")
+    self.assertEqual(df['isrootevent'].distinct().sql().lower().strip(), "select distinct isrootevent from events")
 
   def test_Distinct(self):
-    df = grizzly.read_table("miotest_0_01gb")
-    self.assertEqual(df[['y',"x"]].distinct().sql().lower().strip(), "select distinct y,x from miotest_0_01gb")
+    df = grizzly.read_table("events")
+    self.assertEqual(df[['y',"x"]].distinct().sql().lower().strip(), "select distinct y,x from events")
     # print(df[['y',"x"]].distinct().sql().lower().strip())
 
   def test_Eq(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid = 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid = 468189636")
 
   def test_Ne(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] != 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid <> 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid <> 468189636")
 
   def test_Lt(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] < 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid < 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid < 468189636")
 
   def test_Le(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] <= 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid <= 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid <= 468189636")
 
   def test_Gt(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] > 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid > 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid > 468189636")
 
   def test_Ge(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
     df = df[df['globaleventid'] >= 468189636]
 
-    self.assertEqual(df.sql().lower().strip(), "select  * from miotest_0_01gb   where miotest_0_01gb.globaleventid >= 468189636")
+    self.assertEqual(df.sql().lower().strip(), "select  * from events   where events.globaleventid >= 468189636")
 
   def test_show(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
 
     df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
     df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
@@ -158,7 +158,7 @@ class DataFrameTest(CodeMatcher):
 
 
   def test_showPretty(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
 
     df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
     df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
@@ -183,7 +183,7 @@ class DataFrameTest(CodeMatcher):
       sys.stdout = bkp
 
   def test_toString(self):
-    df = grizzly.read_table("miotest_0_01gb") 
+    df = grizzly.read_table("events") 
 
     df = df[df['globaleventid'] == 467268277]
     df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
