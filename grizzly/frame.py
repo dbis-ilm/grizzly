@@ -129,8 +129,9 @@ class DataFrame(object):
     """
     Execute an arbitrary SQL query and return the result set
     """
-    rs = Connection.db.execute(qry)
-    return rs
+    cursor = Connection.db.cursor()
+    cursor.execute(qry)
+    return cursor
 
 ### produce SQL string
   def sql(self):

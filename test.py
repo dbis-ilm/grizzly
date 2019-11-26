@@ -1,7 +1,6 @@
 import unittest
 import sqlite3
 
-import unittest
 import re
 
 import grizzly
@@ -127,6 +126,19 @@ class DataFrameTest(CodeMatcher):
     
     self.matchSnipped(j.sql(), expected)
 
+  def test_triJoin(self):
+    df1 = grizzly.read_table("t1")
+    df2 = grizzly.read_table("t2")
+    df3 = grizzly.read_table("t3")
+    df3 = df3[["b,d"]]
+    j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']), how="left outer")
+    
+    j = j[["m","x"]]
+    
+    j2 = j.join(df3, on = (j['a'] == df3['b']) & (j['c'] <= df3['d']), how="inner")
+
+    print(j2.sql())
+
 
   def test_Distinct(self):
     df = grizzly.read_table("events")
@@ -230,7 +242,10 @@ class DataFrameTest(CodeMatcher):
 
     rows = df.count()
 
-    self.assertEqual(len(strDF), rows + 3) # column names + top rule + bottom rule
+    dfLen = len(strDF)
+    rowsLen = rows+ 3
+
+    self.assertEqual(dfLen, rowsLen) # column names + top rule + bottom rule
 
 
 
