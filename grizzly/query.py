@@ -1,14 +1,33 @@
 import random
 import string
 
-class Query(object):
+tVarCounter = 0
+
+class Query:
+
+  def __init__(self):
+    self.tVar = f"_t{tVarCounter}"
+
+    self.filters = []
+    self.projections = None
+    self.distinct = False
+    self.table = None
+    self.groupcols = []
+    self.groupagg = None
+    self.joins = []
+
+  def sql(self):
+    return f"SELECT {','.join(self.projections)} FROM {self.froms[0]}"
+
+
+class Query2(object):
   def __init__(self, *args, **kwargs):
     """
     Construct a new empty query
     """
     super().__init__(*args, **kwargs)
     self.filters = []
-    self.projList = []
+    self.projList = None
     self.froms = ""
     self.groupcols = []
     self.groupagg = None

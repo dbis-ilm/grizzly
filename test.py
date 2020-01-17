@@ -52,6 +52,11 @@ class DataFrameTest(CodeMatcher):
   def tearDown(self):
     Connection.db.close()
 
+  def test_New(self):
+    df = grizzly.read_table("events")
+    df = df[["a"]]
+    print(df.sql())
+
   def test_selectStar(self):
     df = grizzly.read_table("events") 
     self.assertEqual(df.sql().lower().strip(), "select  * from events")

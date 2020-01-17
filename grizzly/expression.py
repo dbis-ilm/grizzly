@@ -1,5 +1,3 @@
-from . import frame
-
 class Expr(object):
   def __init__(self, left, right, opStr):
     super().__init__()
@@ -12,7 +10,7 @@ class Expr(object):
     
     if isinstance(self.right, str):
       rightSQLRep = f"'{self.right}'"
-    elif isinstance(self.right, frame.DataFrame):
+    elif isinstance(self.right, frame.DataFrame): # if right hand side is a DataFrame, we need to create code first 
       rightSQLRep = f"__RIGHTNAME__.{self.right.columns[0]}"
     else:
       rightSQLRep = self.right

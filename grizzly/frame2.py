@@ -5,79 +5,19 @@ from .connection import Connection
 
 # from beautifultable import BeautifulTable
 
-class DataFrame(object):
+class DataFrameOld(object):
 
-  def __init__(self, columns, op):
-    self.op = op
+  def __init__(self, columns, parents):
     self.columns = columns
+    self.parents = parents
 
 
-#####################################################
-### relational ops
-
-  def filter(self, expr):
-    self.op = Filter(expr, self.op)
-    return self
-
-  def project(self, attrs):
-    # print(self)
-    # print(attrs)
-    # print("---------")
-    op = Projection(attrs, self.op)
-    newColumns = attrs #[col for col in self.columns if col.name in attrs]
-
-    return DataFrame(newColumns, op)
-
-  def distinct(self):
-    newOp = Projection(None, self.op, distinct = True)
-    return DataFrame(self.columns, newOp)
-
-  def join(self, other, on, how, comp = "="):
-    self.op = Join(other, on, how, comp, self.op)
-    return DataFrame(self.columns + other.columns, self.op)
-
-  def groupby(self, attrs):
-    # self.op = Grouping(attrs, self.op)
-    # return self
-    self.op = Grouping(attrs, self.op )
-    return DataFrame(attrs,  self.op)
-
-  def __getitem__(self, key):
-    theType = type(key)
-
-    if isinstance(key, Expr):
-      # print(f"filter col: {key}")
-      return self.filter(key)
-    elif theType is str:
-      # print(f"projection col: {key}")
-      return self.project([key])
-    elif theType is list:
-      # print(f"projection list: {key}")
-      return self.project(key)
-    else:
-      print(f"{key} has type {theType} -- ignoring")
-      return self
+  
 
 #####################################################
 ### aggregates
 
-  def min(self, col=None):
-    return self._execAgg("min",col)
-
-  def max(self, col=None):
-    return self._execAgg("max",col)
-
-  def mean(self, col=None):
-    return self._execAgg('avg',col)
-
-  def count(self, col=None):
-    colName = "*"
-    if col is not None:
-      colName = col
-    return self._execAgg("count",colName)
-
-  def sum(self , col=None):
-    return self._execAgg("sum", col)
+  
 
 
   def _execAgg(self, func, col):
@@ -224,32 +164,3 @@ class DataFrame(object):
     rs.close()
 
     return str(table)
-
-
-################
-### comparisons
-  def __eq__(self, other):
-    # print(f"eq on {self.columns[0]} and {other}")
-    expr = Eq(f"{self.op.name()}.{self.columns[0]}", other)
-    return expr
-
-
-  def __gt__(self, other):
-    expr = Gt(f"{self.op.name()}.{self.columns[0]}", other)
-    return expr
-
-  def __lt__(self, other):
-    expr = Lt(f"{self.op.name()}.{self.columns[0]}", other)
-    return expr
-
-  def __ge__(self, other):
-    expr = Ge(f"{self.op.name()}.{self.columns[0]}", other)
-    return expr
-  
-  def __le__(self, other):
-    expr = Le(f"{self.op.name()}.{self.columns[0]}", other)
-    return expr
-
-  def __ne__(self, other):
-    expr = Ne(f"{self.op.name()}.{self.columns[0]}", other)
-    return expr
