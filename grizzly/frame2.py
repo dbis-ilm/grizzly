@@ -1,6 +1,6 @@
 from .sqlops import From, Filter, Projection, Grouping, Join
 from .column import Expr, Eq, Ne, Gt, Ge, Lt, Le, And, Or
-from .query import Query
+from .query import SQLGenerator
 from .connection import Connection
 
 # from beautifultable import BeautifulTable
@@ -17,52 +17,6 @@ class DataFrameOld(object):
 #####################################################
 ### aggregates
 
-  
-
-
-  def _execAgg(self, func, col):
-    """
-    Actually compute the aggregation function.
-
-    If we have a GROUP BY operation, the aggregation is only stored
-    as a transformation and needs to be executed using show() or similar.
-
-    If no grouping exists, we want to compute the aggregate over the complete
-    table and return the scalar result directly
-    """
-    colName = None
-    if col is None:
-      colName = self.columns[0]
-    else:
-      colName = col
-
-    funcCode = f"{func}({colName})"  
-
-    if isinstance(self.op, Grouping):
-      newOp = Grouping(self.op.groupcols, self.op.parent)
-      newOp.setAggFunc(funcCode)
-      
-      return DataFrame(self.columns, newOp)
-      
-    else:
-      return self._doExecAgg(funcCode)
-    
-
-  def _doExecAgg(self, funcCode):
-    """
-    Really executes the aggregation and returns the single result
-    """
-
-    # aggregation over a table is performed in a way that the actual query
-    # that was built is executed as an inner query and around that, we 
-    # compute the aggregation
-    innerSQL = self.sql()
-    aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
-    
-    # execute an SQL query and get the result set
-    rs = self._doExecQuery(aggSQL)
-    #fetch first (and only) row, return first column only
-    return rs.fetchone()[0]
 
 
   def _doExecQuery(self, qry):
@@ -80,7 +34,7 @@ class DataFrameOld(object):
     """
 
     # the query object
-    qry = Query()
+    qry = SQLGenerator()
 
     # traverse the "query plan" and fill the query object
     currOp = self.op

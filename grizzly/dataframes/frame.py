@@ -1,18 +1,25 @@
-from grizzly.expression import Eq, Ne, Ge, Gt, Le, Le, And, Or, Expr
-
-class Table(object):
-  pass
-
-class Projection(object):
-  pass
-
+from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef
+from grizzly.generator import GrizzlyGenerator
+from grizzly.aggregates import AggregateType
 ###########################################################################
 # Base DataFrame with common operations
 
 class DataFrame(object):
 
-  def __init__(self, parents):
+  tVarCounter = 0
+
+  @staticmethod
+  def _incrAndGetTupleVar():
+    tVar = f"_t{DataFrame.tVarCounter}"
+    DataFrame.tVarCounter += 1
+    return tVar
+
+  def __init__(self, parents, alias):
     super(DataFrame, self).__init__()
+
+    # self.tVar = DataFrame._incrAndGetTupleVar()
+    self.alias = alias
+
     if parents is None or type(parents) is list:
       self.parents = parents
     else:
@@ -22,12 +29,12 @@ class DataFrame(object):
     return Filter(expr, self)
 
   def project(self, cols):
-    return Projection(cols, self, distinct = False)
+    return Projection(cols, self)
 
   def distinct(self):
-    return Projection(None, self, distinct = True)
+    return Projection(None, self, doDistinct = True)
 
-  def join(self, other, on, how, comp = "="):
+  def join(self, other, on, how="inner", comp = "="):
     return Join(self, other, on, how, comp)
 
   def groupby(self, groupCols):
@@ -39,17 +46,15 @@ class DataFrame(object):
   def __getitem__(self, key):
     theType = type(key)
 
-    from grizzly.expression import Expr
-
     if isinstance(key, Expr):
       # print(f"filter col: {key}")
       return self.filter(key)
     elif theType is str:
       # print(f"projection col: {key}")
-      return self.project([key])
+      return self.project([ColRef(key, self)])
     elif theType is list:
       # print(f"projection list: {key}")
-      return self.project(key)
+      return self.project([ColRef(k, self) for k in key])
     else:
       print(f"{key} has type {theType} -- ignoring")
       return self
@@ -58,29 +63,76 @@ class DataFrame(object):
   # Comparison expressions
 
   def __eq__(self, other):
-    # print(f"eq on {self.columns[0]} and {other}")
-    expr = Eq(f"{self.op.name()}.{self.columns[0]}", other)
+    if not isinstance(self, Projection) or len(self.attrs) != 1:
+      raise ExpressionException("Must have a projection with exactly one attribute")
+
+    if isinstance(other, DataFrame):
+      r = other.attrs[0]
+    else:
+      r = other
+
+    expr = Eq(self.attrs[0], r)
     return expr
 
 
   def __gt__(self, other):
-    expr = Gt(f"{self.op.name()}.{self.columns[0]}", other)
+    if not isinstance(self, Projection) or len(self.attrs) != 1:
+      raise ExpressionException("Must have a projection with exactly one attribute")
+
+    if isinstance(other, DataFrame):
+      r = other.attrs[0]
+    else:
+      r = other
+
+    expr = Gt(self.attrs[0], r)
     return expr
 
   def __lt__(self, other):
-    expr = Lt(f"{self.op.name()}.{self.columns[0]}", other)
+    if not isinstance(self, Projection) or len(self.attrs) != 1:
+      raise ExpressionException("Must have a projection with exactly one attribute")
+
+    if isinstance(other, DataFrame):
+      r = other.attrs[0]
+    else:
+      r = other
+
+    expr = Lt(self.attrs[0], r)
     return expr
 
   def __ge__(self, other):
-    expr = Ge(f"{self.op.name()}.{self.columns[0]}", other)
+    if not isinstance(self, Projection) or len(self.attrs) != 1:
+      raise ExpressionException("Must have a projection with exactly one attribute")
+
+    if isinstance(other, DataFrame):
+      r = other.attrs[0]
+    else:
+      r = other
+
+    expr = Ge(self.attrs[0], r)
     return expr
   
   def __le__(self, other):
-    expr = Le(f"{self.op.name()}.{self.columns[0]}", other)
+    if not isinstance(self, Projection) or len(self.attrs) != 1:
+      raise ExpressionException("Must have a projection with exactly one attribute")
+
+    if isinstance(other, DataFrame):
+      r = other.attrs[0]
+    else:
+      r = other
+
+    expr = Le(self.attrs[0], r)
     return expr
 
   def __ne__(self, other):
-    expr = Ne(f"{self.op.name()}.{self.columns[0]}", other)
+    if not isinstance(self, Projection) or len(self.attrs) != 1:
+      raise ExpressionException("Must have a projection with exactly one attribute")
+
+    if isinstance(other, DataFrame):
+      r = other.attrs[0]
+    else:
+      r = other
+
+    expr = Ne(self.attrs[0], r)
     return expr
 
   ###########################################################################
@@ -90,58 +142,42 @@ class DataFrame(object):
 
   ###################################
   # aggregation functions
-
+  from grizzly.aggregates import AggregateType
   def min(self, col=None):
-    return self._execAgg("min",col)
+    # return self._execAgg("min",col)
+    return GrizzlyGenerator.aggregate(self, col, AggregateType.MIN)
 
   def max(self, col=None):
-    return self._execAgg("max",col)
+    # return self._execAgg("max",col)
+    return GrizzlyGenerator.aggregate(self, col, AggregateType.MAX)
 
   def mean(self, col=None):
-    return self._execAgg('avg',col)
+    # return self._execAgg('avg',col)
+    return GrizzlyGenerator.aggregate(self, col, AggregateType.MEAN)
 
   def count(self, col=None):
     colName = "*"
     if col is not None:
       colName = col
-    return self._execAgg("count",colName)
+    # return self._execAgg("count",colName)
+    return GrizzlyGenerator.aggregate(self, colName, AggregateType.COUNT)
 
-  def sum(self , col=None):
-    return self._execAgg("sum", col)
+  def sum(self , col):
+    return GrizzlyGenerator.aggregate(self, col, AggregateType.SUM)
+    # return self._execAgg("sum", col)
 
   ###################################
   # show functions
 
-  def sql(self):
-    from grizzly.query import Query
-    qry = Query()
+  def generate(self):
+    return GrizzlyGenerator.generate(self)
 
-    curr = self
-    while curr is not None:
-
-      if isinstance(curr,Table):
-        qry.table = curr.table
-      elif isinstance(curr,Projection):
-        if qry.projections is None:
-          qry.projections = set(curr.attrs)
-        else:
-          qry.projections.intersection(curr.attrs)
-        if curr.distinct:
-          qry.distinct = "distinct"
-      elif isinstance(curr,Filter):
-        qry.filters.append(curr.expr)
-      elif isinstance(curr, Join):
-        pass
-
-      if curr.parents is None:
-        curr = None
-      else:
-        #TODO handle joins etc
-        curr = curr.parents[0]
-
-    return qry.sql()
-
-
+  def show(self, pretty=False,delim=",",maxColWidth=20):
+    GrizzlyGenerator.execute(self,delim,pretty,maxColWidth)
+    
+  def __str__(self):
+    return GrizzlyGenerator.toString(self)
+    
 ###########################################################################
 # Concrete DataFrames representing an operation
 
@@ -149,50 +185,33 @@ class DataFrame(object):
 class Table(DataFrame):
   def __init__(self, table):
     self.table = table
-    self.parents = None
-
-  def sqlRepr(self, prefix):
-    return f"{self.table} {prefix}"
+    super().__init__(None, DataFrame._incrAndGetTupleVar())
 
 class Projection(DataFrame):
 
-  def __init__(self, attrs, parents, distinct = False):
+  def __init__(self, attrs, parent, doDistinct = False):
     self.attrs = attrs
-    self.distinct = distinct
-    super().__init__(parents)
+    self.doDistinct = doDistinct
+    super().__init__(parent, parent.alias)
 
-  def sqlRepr(self,prefix):
-    prefixed = [f"{prefix}.{attr}" for attr in self.attrs]
+class Filter(DataFrame):
 
-    return ",".join(prefixed)
-
-class Filtered(DataFrame):
-
-  def __init__(self, expr, parents):
+  def __init__(self, expr, parent):
     self.expr = expr
-    super().__init__(parents)
-
-  def sqlRepr(self, prefix):
-    return str(self.expr)
+    super().__init__(parent, parent.alias)
+ 
 
 class Grouping(DataFrame):
 
-  def __init__(self, groupCols, parents):
-    self.groupCols = groupCols
-    super().__init__(parents)
-
-  def sqlRepr(self, prefix):
-    prefixed = [f"{prefix}.{attr}" for attr in self.groupCols]
-
-    return ",".join(prefixed)
+  def __init__(self, groupCols, parent):
+    self.groupCols = [ColRef(col, parent) for col in groupCols]
+    super().__init__(parent, parent.alias)
 
 class Join(DataFrame):
 
-  def __init__(self, left, right, on, how, comp):
+  def __init__(self, parent, other, on, how, comp):
+    self.right = other
     self.on = on
     self.how = how
     self.comp = comp
-    super().__init__([left, right])
-
-  def sqlRepr(self, prefix):
-    return f"(__LEFT__) {prefix[0]} {self.how} JOIN (__RIGHT__) {prefix[1]} ON {prefix[0]}.{self.on[0]} {self.comp} {prefix[1]}.{self.on[1]}"
+    super().__init__(parent, parent.alias)

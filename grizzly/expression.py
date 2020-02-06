@@ -1,21 +1,12 @@
+class ExressionException(Exception):
+  pass
+
 class Expr(object):
   def __init__(self, left, right, opStr):
     super().__init__()
     self.left = left
     self.right = right
     self.opStr = opStr
-
-  def __str__(self):
-    rightSQLRep = ""
-    
-    if isinstance(self.right, str):
-      rightSQLRep = f"'{self.right}'"
-    elif isinstance(self.right, frame.DataFrame): # if right hand side is a DataFrame, we need to create code first 
-      rightSQLRep = f"__RIGHTNAME__.{self.right.columns[0]}"
-    else:
-      rightSQLRep = self.right
-
-    return f"{self.left} {self.opStr} {rightSQLRep}"
 
   def __and__(self, other):
     expr = And(self, other)
@@ -24,7 +15,21 @@ class Expr(object):
   def __or__(self, other):
     expr = Or(self, other)
     return expr
-    
+
+class ColRef(object):
+  def __init__(self, column, df):
+    self.column = column
+    self.df = df
+    # self.prefix = prefix
+
+  def __str__(self):
+    if self.df.alias:
+      s = f"{self.df.alias}.{self.column}"
+    else:
+      s = self.column
+    return s
+
+
 
 class Eq(Expr):
   def __init__(self, left, right):
