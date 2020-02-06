@@ -5,9 +5,8 @@ from grizzly.dataframes.frame import Table, Projection, Filter, Join, Grouping, 
 from grizzly.expression import ColRef, Expr
 from grizzly.aggregates import AggregateType
 
-class SQLGenerator:
-
-  def __init__(self, connection):
+class Query:
+  def __init__(self):
     self.filters = []
     self.projections = None
     self.doDistinct = False
@@ -15,9 +14,8 @@ class SQLGenerator:
     self.groupcols = []
     self.groupagg = None
     self.joins = []
-    self.connection = connection
 
-  def _reset(self, closeConnection = False):
+  def _reset(self):
     self.filters = []
     self.projections = None
     self.doDistinct = False
@@ -25,14 +23,6 @@ class SQLGenerator:
     self.groupcols = []
     self.groupagg = None
     self.joins = []
-    if closeConnection:
-      self.close()
-
-  def close(self):
-    self.connection.close()
-
-  def generate(self, df):
-    return self._buildFrom(df)
 
   def _doExprToSQL(self, expr):
     exprSQL = ""
@@ -44,7 +34,6 @@ class SQLGenerator:
       # if right hand side is a DataFrame, we need to create code first 
       subQry = SQLGenerator()
       exprSQL = subQry._buildFrom(expr)
-      # rightSQLRep = f"{prefix}.{self.right.columns[0]}"
 
     elif isinstance(expr, ColRef):
       exprSQL = str(expr)
@@ -75,7 +64,6 @@ class SQLGenerator:
         self.table = f"{curr.table} {curr.alias}"
 
       elif isinstance(curr,Projection):
-        # prefixed = set([f"{curr.alias}.{attr.column}" for attr in curr.attrs])
         if curr.attrs:
           prefixed = [str(attr) for attr in curr.attrs]
           if not self.projections:
@@ -93,7 +81,7 @@ class SQLGenerator:
 
       elif isinstance(curr, Join):
         rtVar = DataFrame._incrAndGetTupleVar()
-        rightSQL = self.generate(curr.right)
+        rightSQL = self._buildFrom(curr.right)
         curr.right.alias = rtVar
 
         if isinstance(curr.on, Expr):
@@ -144,6 +132,20 @@ class SQLGenerator:
 
     qrySoFar = f"SELECT {projs} FROM {self.table}{joins}{where}{grouping}"
     return qrySoFar
+
+class SQLGenerator:
+
+  def __init__(self, connection):
+    self.connection = connection
+
+  def close(self):
+    self.connection.close()
+
+  def generate(self, df):
+    qry = Query()
+    return qry._buildFrom(df)
+
+  
 
   def _doExecQuery(self, qry):
     """

@@ -172,7 +172,7 @@ class DataFrame(object):
   def generate(self):
     return GrizzlyGenerator.generate(self)
 
-  def show(self, pretty=False,delim=",",maxColWidth=20):
+  def show(self, pretty=False, delim=",", maxColWidth=20):
     GrizzlyGenerator.execute(self,delim,pretty,maxColWidth)
     
   def __str__(self):

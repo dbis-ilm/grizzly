@@ -15,7 +15,7 @@ class CodeMatcher(unittest.TestCase):
       mapstr = "with mapping:\n"
       for templ,tVar in mapping.items():
         mapstr += f"\t{templ} -> {tVar}\n"
-      self.fail(f"Mismatch\nFound:    {snipped}\nExpected: {template}\n{mapstr}\nExpanded:\t{expanded}")
+      self.fail(f"Mismatch\nFound:    {snipped}\nExpanded:\t{expanded}\nExpected: {template}\n{mapstr}")
 
       
 
@@ -182,7 +182,11 @@ class DataFrameTest(CodeMatcher):
     
     j2 = j.join(df3, on = (j['a'] == df3['b']) & (j['c'] <= df3['d']), how="inner")
 
-    print(j2.generate())
+    actual = j2.generate().lower()
+    expected = "select $t0.m, $t0.x from t1 _t0 inner join (select $t1.b, $t1.d from t3 $t1) $t2 on left outer join (select * from t2 $t3) $t4 on $t0.a = $t2.b and $t0.c <= $t2.d"
+
+    # print(j2.generate())
+    self.matchSnipped(actual, expected)
 
   def test_DistinctAll(self):
     df = grizzly.read_table("events")
