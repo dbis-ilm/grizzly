@@ -17,8 +17,8 @@ class DataFrame(object):
   def __init__(self, parents, alias):
     super(DataFrame, self).__init__()
 
-    # self.tVar = DataFrame._incrAndGetTupleVar()
     self.alias = alias
+    # self.columns = columns
 
     if parents is None or type(parents) is list:
       self.parents = parents
@@ -73,7 +73,6 @@ class DataFrame(object):
 
     expr = Eq(self.attrs[0], r)
     return expr
-
 
   def __gt__(self, other):
     if not isinstance(self, Projection) or len(self.attrs) != 1:
@@ -142,7 +141,7 @@ class DataFrame(object):
 
   ###################################
   # aggregation functions
-  from grizzly.aggregates import AggregateType
+  
   def min(self, col=None):
     # return self._execAgg("min",col)
     return GrizzlyGenerator.aggregate(self, col, AggregateType.MIN)

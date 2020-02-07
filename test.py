@@ -153,7 +153,7 @@ class DataFrameTest(CodeMatcher):
     joined = df.join(other = df2, on=["globaleventid", "globaleventid"], how = "inner")
 
     actual = joined.generate()
-    expected = "SELECT * FROM events $t1 inner join (select * from events $t9) $t2 ON $t1.globaleventid = $t2.globaleventid where $t1.globaleventid = 470259271"
+    expected = "SELECT * FROM events $t1 inner join events $t2 ON $t1.globaleventid = $t2.globaleventid where $t1.globaleventid = 470259271"
 
     self.matchSnipped(actual, expected)
 
@@ -165,7 +165,7 @@ class DataFrameTest(CodeMatcher):
 
     j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']), how="left outer")
 
-    expected = "SELECT * FROM t1 $t0 LEFT OUTER JOIN (SELECT * FROM t2 $t1) $t2 ON $t0.a = $t2.b AND $t0.c <= $t2.d".lower()
+    expected = "SELECT * FROM t1 $t0 LEFT OUTER JOIN t2 $t2 ON $t0.a = $t2.b AND $t0.c <= $t2.d".lower()
     
     actual = j.generate().lower()
 
@@ -183,10 +183,13 @@ class DataFrameTest(CodeMatcher):
     j2 = j.join(df3, on = (j['a'] == df3['b']) & (j['c'] <= df3['d']), how="inner")
 
     actual = j2.generate().lower()
-    expected = "select $t0.m, $t0.x from t1 _t0 inner join (select $t1.b, $t1.d from t3 $t1) $t2 on left outer join (select * from t2 $t3) $t4 on $t0.a = $t2.b and $t0.c <= $t2.d"
+    print(actual)
+    # expected = "select $t0.m, $t0.x from t1 _t0 inner join (select $t1.b, $t1.d from t3 $t1) $t2 on left outer join (select * from t2 $t3) $t4 on $t0.a = $t2.b and $t0.c <= $t2.d"
+    # expected = "select $t1.m, $t1.x from t1 $t1 left outer join t2 $t2 on $t1.a = $t2.b and $t1.c <= $t2.d inner join (select $t3.b, $t3.d from t3 $t3) $t4 on $t0 "
+    # self.matchSnipped(actual, expected)
 
-    # print(j2.generate())
-    self.matchSnipped(actual, expected)
+    self.fail("This is not correctly implemented!")
+
 
   def test_DistinctAll(self):
     df = grizzly.read_table("events")

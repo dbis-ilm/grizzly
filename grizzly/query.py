@@ -80,16 +80,24 @@ class Query:
         self.filters.append(exprStr)
 
       elif isinstance(curr, Join):
-        rtVar = DataFrame._incrAndGetTupleVar()
-        rightSQL = self._buildFrom(curr.right)
-        curr.right.alias = rtVar
+        # rtVar = DataFrame._incrAndGetTupleVar()
+        
+
+        if isinstance(curr.right, Table):
+          rightSQL = curr.right.table
+          rtVar = curr.right.alias
+        else:
+          subQry = Query()
+          rightSQL = f"({subQry._buildFrom(curr.right)})"
+          rtVar = DataFrame._incrAndGetTupleVar()
+          curr.right.alias = rtVar
 
         if isinstance(curr.on, Expr):
           onSQL = self._exprToSQL(curr.on)
         else:
           onSQL = f"{curr.alias}.{curr.on[0]} {curr.comp} {rtVar}.{curr.on[1]}"
         
-        joinSQL = f"{curr.how} JOIN ({rightSQL}) {rtVar} ON {onSQL}"
+        joinSQL = f"{curr.how} JOIN {rightSQL} {rtVar} ON {onSQL}"
         self.joins.append(joinSQL)
 
       elif isinstance(curr, Grouping):
@@ -101,8 +109,8 @@ class Query:
         curr = curr.parents[0]
 
     joins = ""
-    if self.joins:
-      joins = " "+" ".join(self.joins)
+    while self.joins:
+      joins += " "+self.joins.pop()
     
     projs = "*"
     if self.projections:
