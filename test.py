@@ -65,11 +65,11 @@ class DataFrameTest(CodeMatcher):
 
   def test_New(self):
     df = grizzly.read_table("events")
-    df = df[["a"]]
-    df = df[df["b"] == 2]
+    df = df["a"]
+    df = df[df["a"] == 2]
 
     df2 = grizzly.read_table("events")
-    df3 = df.join(df2,on=["globaleventid","globaleventid"])
+    df3 = df.join(df2,on=["a","a"])
     print(df.generate())
 
   def test_selectStar(self):
@@ -180,7 +180,7 @@ class DataFrameTest(CodeMatcher):
     
     j = j[["m","x"]]
     
-    j2 = j.join(df3, on = (j['a'] == df3['b']) & (j['c'] <= df3['d']), how="inner")
+    j2 = j.join(df3, on = (j['m'] == df3['b']) & (j['x'] <= df3['d']), how="inner")
 
     actual = j2.generate().lower()
     print(actual)

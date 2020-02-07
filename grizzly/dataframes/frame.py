@@ -14,16 +14,26 @@ class DataFrame(object):
     DataFrame.tVarCounter += 1
     return tVar
 
-  def __init__(self, parents, alias):
+  def __init__(self, columns, parents, alias):
     super(DataFrame, self).__init__()
 
     self.alias = alias
-    # self.columns = columns
+    self.columns = columns
 
     if parents is None or type(parents) is list:
       self.parents = parents
     else:
       self.parents = [parents]
+
+  def hasColumn(self, colName):
+    if not self.columns:
+      return True
+
+    for ref in self.columns:
+      if ref.column == colName:
+        return True
+
+    return False
 
   def filter(self, expr):
     return Filter(expr, self)
@@ -35,6 +45,15 @@ class DataFrame(object):
     return Projection(None, self, doDistinct = True)
 
   def join(self, other, on, how="inner", comp = "="):
+
+    if isinstance(on, list):
+      
+      from grizzly.expression import ExpressionException
+      if not self.hasColumn(on[0]):
+        raise ExpressionException(f"No such column {on[0]} for join in left hand side")
+      if not other.hasColumn(on[1]):
+        raise ExpressionException(f"No such column {on[1]} for join in right hand side")
+
     return Join(self, other, on, how, comp)
 
   def groupby(self, groupCols):
@@ -184,33 +203,40 @@ class DataFrame(object):
 class Table(DataFrame):
   def __init__(self, table):
     self.table = table
-    super().__init__(None, DataFrame._incrAndGetTupleVar())
+    super().__init__([], None, DataFrame._incrAndGetTupleVar())
 
 class Projection(DataFrame):
 
   def __init__(self, attrs, parent, doDistinct = False):
-    self.attrs = attrs
+    if attrs and not isinstance(attrs[0], ColRef):
+      self.attrs = [ColRef(attr, parent) for attr in attrs]
+    else:
+      self.attrs = attrs
+
     self.doDistinct = doDistinct
-    super().__init__(parent, parent.alias)
+    super().__init__(self.attrs, parent, parent.alias)
 
 class Filter(DataFrame):
 
   def __init__(self, expr, parent):
+    super().__init__(parent.columns, parent, parent.alias)
     self.expr = expr
-    super().__init__(parent, parent.alias)
  
 
 class Grouping(DataFrame):
 
   def __init__(self, groupCols, parent):
-    self.groupCols = [ColRef(col, parent) for col in groupCols]
-    super().__init__(parent, parent.alias)
+    if not isinstance(groupCols[0], ColRef):
+      self.groupCols = [ColRef(col, parent) for col in groupCols]
+    else:
+      self.groupCols = groupCols
+
+    super().__init__(self.groupCols, parent, parent.alias)
 
 class Join(DataFrame):
-
   def __init__(self, parent, other, on, how, comp):
+    super().__init__(parent.columns.extend(other.columns), parent, parent.alias)
     self.right = other
     self.on = on
     self.how = how
     self.comp = comp
-    super().__init__(parent, parent.alias)
