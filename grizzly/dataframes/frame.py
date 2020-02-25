@@ -1,4 +1,4 @@
-from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef
+from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
 ###########################################################################
@@ -62,6 +62,9 @@ class DataFrame(object):
   ###################################
   # shortcuts
 
+  def __getattr__(self, name):
+    return self.project([ColRef(name, self)])
+
   def __getitem__(self, key):
     theType = type(key)
 
@@ -71,9 +74,21 @@ class DataFrame(object):
     elif theType is str:
       # print(f"projection col: {key}")
       return self.project([ColRef(key, self)])
+    elif theType is Projection:
+      return self.project([key.attrs[0]])
     elif theType is list:
-      # print(f"projection list: {key}")
-      return self.project([ColRef(k, self) for k in key])
+      
+      projList = []
+      for e in key:
+        t = type(e)
+        if t is str:
+          projList.append(ColRef(e, self))
+        elif t is Projection:
+          projList.append(e.attrs[0])
+        else:
+          raise ExpressionException(f"expected a column name string or projection, but got {e}")
+
+      return self.project(projList)
     else:
       print(f"{key} has type {theType} -- ignoring")
       return self

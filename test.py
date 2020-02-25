@@ -70,7 +70,13 @@ class DataFrameTest(CodeMatcher):
 
     df2 = grizzly.read_table("events")
     df3 = df.join(df2,on=["a","a"])
-    print(df.generate())
+    actualDF = df.generate()
+    expectedDF = "select $t0.a from events $t0 where $t0.a = 2"
+
+    self.matchSnipped(actualDF, expectedDF)
+
+    actualDF3 = df3.generate()
+    expectedDF3 = "select $t0.a from events $t0 inner join (select * from events $t1) $t2 on $t0.a = $t2.a where $t0.a = 2"
 
   def test_selectStar(self):
     df = grizzly.read_table("events") 
@@ -128,21 +134,20 @@ class DataFrameTest(CodeMatcher):
 
   def test_groupByWithAggTwice(self):
     df = grizzly.read_table("events") 
-    df = df[df['globaleventid'] == 468189636]
+    df = df[df['globaleventid'] == 476829606]
     g = df.groupby(["year","monthyear"])
 
     a = g.count("actor2geo_type")
-    print(a)  
-    # aActual = a.generate().lower().strip()
-    # aExpected = "select events.year, events.monthyear, count(actor2geo_type) from events where events.globaleventid = 468189636 group by events.year, events.monthyear"
-    # self.matchSnipped(aActual, aExpected)
+    
+    gActual = g.generate()
+    gExpected = "select $t0.year, $t0.monthyear from events $t0 where $t0.globaleventid = 476829606 group by $t0.year, $t0.monthyear"
+
+    self.assertEqual(a,1)
+    self.matchSnipped(gActual, gExpected)
 
 
     m = g.mean("avgtone")
-    print(m)
-    # mActual = m.generate().lower().strip()
-    # mExpected = "select events.year, events.monthyear, avg(avgtone) from events where events.globaleventid = 468189636 group by events.year, events.monthyear"
-    # self.matchSnipped(mActual, mExpected)
+    self.assertEqual(m, 0.909090909090911)
 
   def test_joinTest(self):
     df = grizzly.read_table("events") 
@@ -178,17 +183,17 @@ class DataFrameTest(CodeMatcher):
     df3 = df3[["b","d"]]
     j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']), how="left outer")
     
-    j = j[["m","x"]]
+    j = j[[df1.m,df2.x]]
     
     j2 = j.join(df3, on = (j['m'] == df3['b']) & (j['x'] <= df3['d']), how="inner")
 
-    actual = j2.generate().lower()
+    actual = j2.generate()
     print(actual)
     # expected = "select $t0.m, $t0.x from t1 _t0 inner join (select $t1.b, $t1.d from t3 $t1) $t2 on left outer join (select * from t2 $t3) $t4 on $t0.a = $t2.b and $t0.c <= $t2.d"
-    # expected = "select $t1.m, $t1.x from t1 $t1 left outer join t2 $t2 on $t1.a = $t2.b and $t1.c <= $t2.d inner join (select $t3.b, $t3.d from t3 $t3) $t4 on $t0 "
-    # self.matchSnipped(actual, expected)
+    expected = "select $t1.m, $t2.x, $t4.b, $t4.d from t1 $t1 left outer join t2 $t2 on $t1.a = $t2.b and $t1.c <= $t2.d inner join (select $t3.b, $t3.d from t3 $t3) $t4 on $t1.m = $t4.b and $t1.x <= $t4.d"
+    self.matchSnipped(actual, expected)
 
-    self.fail("This is not correctly implemented!")
+    # self.fail("This is not correctly implemented!")
 
 
   def test_DistinctAll(self):
