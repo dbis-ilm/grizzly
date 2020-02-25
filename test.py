@@ -188,12 +188,8 @@ class DataFrameTest(CodeMatcher):
     j2 = j.join(df3, on = (j['m'] == df3['b']) & (j['x'] <= df3['d']), how="inner")
 
     actual = j2.generate()
-    print(actual)
-    # expected = "select $t0.m, $t0.x from t1 _t0 inner join (select $t1.b, $t1.d from t3 $t1) $t2 on left outer join (select * from t2 $t3) $t4 on $t0.a = $t2.b and $t0.c <= $t2.d"
     expected = "select $t1.m, $t2.x, $t4.b, $t4.d from t1 $t1 left outer join t2 $t2 on $t1.a = $t2.b and $t1.c <= $t2.d inner join (select $t3.b, $t3.d from t3 $t3) $t4 on $t1.m = $t4.b and $t1.x <= $t4.d"
     self.matchSnipped(actual, expected)
-
-    # self.fail("This is not correctly implemented!")
 
 
   def test_DistinctAll(self):

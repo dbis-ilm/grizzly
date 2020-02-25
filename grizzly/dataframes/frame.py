@@ -35,6 +35,13 @@ class DataFrame(object):
 
     return False
 
+  def setAlias(self, newAlias):
+    if self.columns:
+      for c in self.columns:
+        c.df.alias = newAlias
+
+    self.alias = newAlias
+
   def filter(self, expr):
     return Filter(expr, self)
 

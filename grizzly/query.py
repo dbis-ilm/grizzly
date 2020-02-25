@@ -90,7 +90,8 @@ class Query:
           subQry = Query()
           rightSQL = f"({subQry._buildFrom(curr.right)})"
           rtVar = DataFrame._incrAndGetTupleVar()
-          curr.right.alias = rtVar
+          # curr.right.alias = rtVar
+          curr.right.setAlias(rtVar)
 
         if isinstance(curr.on, Expr):
           onSQL = self._exprToSQL(curr.on)
