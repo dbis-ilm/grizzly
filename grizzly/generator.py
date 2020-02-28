@@ -4,6 +4,13 @@ class GrizzlyGenerator(object):
   """
 
   generator = None
+  tVarCounter = 0
+
+  @staticmethod
+  def _incrAndGetTupleVar():
+    tVar = f"_t{GrizzlyGenerator.tVarCounter}"
+    GrizzlyGenerator.tVarCounter += 1
+    return tVar
 
   @staticmethod
   def generate(df):

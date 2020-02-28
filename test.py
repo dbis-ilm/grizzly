@@ -4,7 +4,7 @@ import sqlite3
 import re
 
 import grizzly
-from grizzly.query import SQLGenerator
+from grizzly.sqlgenerator import SQLGenerator
 
 class CodeMatcher(unittest.TestCase):
   

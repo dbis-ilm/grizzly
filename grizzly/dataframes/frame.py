@@ -6,14 +6,6 @@ from grizzly.aggregates import AggregateType
 
 class DataFrame(object):
 
-  tVarCounter = 0
-
-  @staticmethod
-  def _incrAndGetTupleVar():
-    tVar = f"_t{DataFrame.tVarCounter}"
-    DataFrame.tVarCounter += 1
-    return tVar
-
   def __init__(self, columns, parents, alias):
     super(DataFrame, self).__init__()
 
@@ -225,7 +217,8 @@ class DataFrame(object):
 class Table(DataFrame):
   def __init__(self, table):
     self.table = table
-    super().__init__([], None, DataFrame._incrAndGetTupleVar())
+    alias = GrizzlyGenerator._incrAndGetTupleVar()
+    super().__init__([], None, alias)
 
 class Projection(DataFrame):
 
