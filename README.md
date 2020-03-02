@@ -37,7 +37,7 @@ import grizzly
 
 ### Connection
 
-Connect to your database using an appropriate connection string:
+Connect to your database using an appropriate connection string. In order to load the shipped test database containing events from the [GDELT](https://www.gdeltproject.org/) project:
 
 ```python
 import sqlite3
@@ -51,7 +51,7 @@ df = grizzly.read_table("events", con)
 ```
 
 Here, `df` is just a reference, it contains no data from your table.
-To show its contents, use the `show` method:
+To show its complete contents, use the `show` method:
 
 ```python
 df.show()
@@ -64,8 +64,8 @@ This will print the table's content on the screen.
 Operations are similar to Pandas:
 
 ```python
-df[df["id" == 42]] # filter
-df = df[["actor1","actor2"]]
+df[df["globaleventid"] == 470747760] # filter
+df = df[["actor1name","actor2name"]] #projection
 ```
 
 ### Joins
@@ -109,10 +109,9 @@ You can also group the data on multiple columns and compute an aggregate over th
 
 ```python
 df = grizzly.read_table("events")
-df = df[df['id'] == 42]
-g = df.groupby(["year","actor1"])
+g = df.groupby(["year","actor1name"])
 
-a = g.count("actor2")
+a = g.count("actor2name")
 ```
 
 If no aggregation function is used an `show()` is called, only the grouping columns are selected.
@@ -121,18 +120,17 @@ You can apply aggregation functions on non-grouped `DataFrame`s of course. In th
 Thus, `a.sql()` will give
 
 ```sql
-SELECT year, actor1, count(actor2)
+SELECT  events.year, events.actor1name, count(actor2name) 
 FROM events
-WHERE id = 42
-GROUP BY year, actor1
+GROUP BY events.year, events.actor1name
 ```
 
-, whereas `df.count()` (i.e. before the grouping) for the above piece of code will return the single scalar value with the number of records in `df`:
+, whereas `df.count()` (i.e. before the grouping) for the above piece of code will return the single scalar value with the number of records in `df` (22225).
+The query executed for this is:
 
 ```sql
 SELECT count(*)
 FROM events
-WHERE id = 42
 ```
 
 ### SQL
@@ -143,13 +141,6 @@ You can inspect the produced SQL string with `sql()`:
 print(df.sql())
 ```
 
-And the output will be
-
-```sql
-SELECT actor1, actor2
-FROM events
-WHERE id = 42
-```
 
 ## Supported operations
 
@@ -158,3 +149,9 @@ WHERE id = 42
 - join
 - group by
 - aggregation functions: min, max, mean (avg), count, sum
+
+## Limitations
+
+ - Currently, only the few operations above are supported -- more is to come
+ - Grizzly is under development and things might change.
+ - There are certainly some bugs. Probably with complex queries
