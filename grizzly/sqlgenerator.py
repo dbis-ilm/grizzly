@@ -143,26 +143,15 @@ class Query:
 
 class SQLGenerator:
 
-  def __init__(self, connection):
-    self.connection = connection
+  def __init__(self, executor):
+    self.executor = executor
 
   def close(self):
-    self.connection.close()
+    self.executor.close()
 
   def generate(self, df):
     qry = Query()
     return qry._buildFrom(df)
-
-  
-
-  def _doExecQuery(self, qry):
-    """
-    Execute an arbitrary SQL query and return the result set
-    """
-    # print(f"about to execute {qry}")
-    cursor = self.connection.cursor()
-    cursor.execute(qry)
-    return cursor
 
   def toString(self, df):
     from beautifultable import BeautifulTable
@@ -170,7 +159,7 @@ class SQLGenerator:
     table = BeautifulTable()
 
     sql = self.generate(df)
-    rs = self._doExecQuery(sql)
+    rs = self.executor.execute(sql)
   
     for row in rs:
       table.append_row(row)
@@ -188,7 +177,7 @@ class SQLGenerator:
     """
 
     sql = self.generate(df)
-    rs = self._doExecQuery(sql)
+    rs = self.executor.execute(sql)
     cols = [dec[0] for dec in rs.description]
     
 
@@ -272,6 +261,6 @@ class SQLGenerator:
       aggSQL = f"SELECT {funcCode} FROM {df.table}"
     
     # execute an SQL query and get the result set
-    rs = self._doExecQuery(aggSQL)
+    rs = self.executor.execute(aggSQL)
     #fetch first (and only) row, return first column only
     return rs.fetchone()[0]

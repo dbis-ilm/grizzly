@@ -5,6 +5,7 @@ import re
 
 import grizzly
 from grizzly.sqlgenerator import SQLGenerator
+from grizzly.relationaldbexecutor import RelationalExecutor
 
 class CodeMatcher(unittest.TestCase):
   
@@ -53,15 +54,11 @@ class DataFrameTest(CodeMatcher):
   @classmethod
   def setUpClass(cls):
     c = sqlite3.connect("grizzly.db")
-    grizzly.use(SQLGenerator(c))
+    grizzly.use(SQLGenerator(RelationalExecutor(c)))
 
   @classmethod
   def tearDownClass(cls):
     grizzly.close()
-    # Connection.db.close()
-
-  # def tearDown(self):
-  #   GrizzlyGenerator.generator._reset()
 
   def test_New(self):
     df = grizzly.read_table("events")
