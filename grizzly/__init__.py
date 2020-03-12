@@ -2,7 +2,7 @@ from grizzly.dataframes.frame import Table
 from grizzly.generator import GrizzlyGenerator
 
 def use(backend):
-  GrizzlyGenerator.generator = backend
+  GrizzlyGenerator._backend = backend
 
 def close():
   GrizzlyGenerator.close()

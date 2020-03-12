@@ -171,6 +171,8 @@ class DataFrame(object):
   # Actions
   ###########################################################################
 
+  def collect(self, includeHeader = False):
+    return GrizzlyGenerator.collect(self, includeHeader)
 
   ###################################
   # aggregation functions
@@ -205,10 +207,12 @@ class DataFrame(object):
     return GrizzlyGenerator.generate(self)
 
   def show(self, pretty=False, delim=",", maxColWidth=20):
-    GrizzlyGenerator.execute(self,delim,pretty,maxColWidth)
+    print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth))
     
   def __str__(self):
-    return GrizzlyGenerator.toString(self)
+    # strRep = GrizzlyGenerator.toString(self, pretty=True)
+    tableStr = GrizzlyGenerator.table(self)
+    return tableStr
     
 ###########################################################################
 # Concrete DataFrames representing an operation

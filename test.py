@@ -54,7 +54,7 @@ class DataFrameTest(CodeMatcher):
   @classmethod
   def setUpClass(cls):
     c = sqlite3.connect("grizzly.db")
-    grizzly.use(SQLGenerator(RelationalExecutor(c)))
+    grizzly.use(RelationalExecutor(c))
 
   @classmethod
   def tearDownClass(cls):
@@ -259,6 +259,18 @@ class DataFrameTest(CodeMatcher):
     expected = "select * from events $t0  where $t0.globaleventid >= 468189636"
     self.matchSnipped(actual, expected)
 
+  def test_collect(self):
+    df = grizzly.read_table("events") 
+    arr = df.collect(includeHeader=False)
+
+    self.assertEqual(len(arr), 30354)
+
+  def test_collectWithHeader(self):
+    df = grizzly.read_table("events") 
+    arr = df.collect(includeHeader=True)
+
+    self.assertEqual(len(arr), 30354+1)
+
   def test_show(self):
     df = grizzly.read_table("events") 
 
@@ -284,7 +296,7 @@ class DataFrameTest(CodeMatcher):
   def test_showPretty(self):
     df = grizzly.read_table("events") 
 
-    df = df[df['globaleventid'] <= 468189636 ]  #== 467268277
+    df = df[df['globaleventid'] <= 468189636]  #== 467268277
     df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
 
     from io import StringIO
@@ -312,11 +324,12 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == 467268277]
     df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
 
-    strDF = str(df).split("\n")
+    strDF = str(df)
+    splt = strDF.split("\n")
 
     rows = df.count()
 
-    dfLen = len(strDF)
+    dfLen = len(splt)
     rowsLen = rows+ 3
 
     self.assertEqual(dfLen, rowsLen) # column names + top rule + bottom rule

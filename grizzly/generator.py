@@ -3,7 +3,7 @@ class GrizzlyGenerator(object):
   A wraper for the actually used generator
   """
 
-  generator = None
+  _backend = None
   tVarCounter = 0
 
   @staticmethod
@@ -17,18 +17,27 @@ class GrizzlyGenerator(object):
     """
     Call the underlying code generator and produce the query text
     """
-    return GrizzlyGenerator.generator.generate(df)
+    return GrizzlyGenerator._backend.generate(df)
 
   @staticmethod
-  def execute(df, delim, pretty, maxColWidth):
-    """
-    Call the underlying generator and execute the query
-    """
-    GrizzlyGenerator.generator.execute(df,delim,pretty,maxColWidth)
+  def collect(df, includeHeader):
+    return GrizzlyGenerator._backend.collect(df, includeHeader)
+
 
   @staticmethod
-  def toString(df):
-    return GrizzlyGenerator.generator.toString(df)
+  def toString(df, delim=",", pretty=False, maxColWidth=20):
+    """
+    Call the underlying generator, execute the query and return string representation
+    """
+    return GrizzlyGenerator._backend.toString(df,delim,pretty,maxColWidth)
+
+  @staticmethod
+  def table(df):
+    """
+    Call the underlying generator, execute the query and return string representation
+    as a beautiful table...
+    """
+    return GrizzlyGenerator._backend.table(df)
 
   @staticmethod
   def close():
@@ -36,9 +45,9 @@ class GrizzlyGenerator(object):
     Tell the underlying generator to close its connection to
     the data store
     """
-    GrizzlyGenerator.generator.close()
+    GrizzlyGenerator._backend.close()
 
     
   @staticmethod
   def aggregate(df, func, col):
-    return GrizzlyGenerator.generator._execAgg(df, func, col)
+    return GrizzlyGenerator._backend._execAgg(df, func, col)
