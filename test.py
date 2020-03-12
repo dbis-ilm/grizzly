@@ -60,6 +60,16 @@ class DataFrameTest(CodeMatcher):
   def tearDownClass(cls):
     grizzly.close()
 
+  def test_groupby(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["year","actor1name"])
+    a = g._gen_count("actor2name")
+    
+    expected = "select $t0.year, $t0.actor1name, count($t0.actor2name) from events $t0 group by $t0.year, $0.actor1name"
+    actual = a
+
+    self.matchSnipped(actual, expected)
+
   def test_New(self):
     df = grizzly.read_table("events")
     df = df["a"]

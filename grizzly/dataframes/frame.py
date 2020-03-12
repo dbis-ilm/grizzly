@@ -196,6 +196,14 @@ class DataFrame(object):
     # return self._execAgg("count",colName)
     return GrizzlyGenerator.aggregate(self, colName, AggregateType.COUNT)
 
+  def _gen_count(self, col=None):
+    colName = "*"
+    if col is not None:
+      colName = col
+    # return self._execAgg("count",colName)
+    return GrizzlyGenerator._gen_aggregate(self, colName, AggregateType.COUNT)
+
+
   def sum(self , col):
     return GrizzlyGenerator.aggregate(self, col, AggregateType.SUM)
     # return self._execAgg("sum", col)

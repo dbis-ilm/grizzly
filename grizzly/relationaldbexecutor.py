@@ -97,7 +97,7 @@ class RelationalExecutor(object):
     return self._execute(sql)
 
 
-  def _execAgg(self, df, col, func):
+  def _execAgg(self, df, func, col):
     """
     Actually compute the aggregation function.
 
@@ -107,19 +107,6 @@ class RelationalExecutor(object):
     If no grouping exists, we want to compute the aggregate over the complete
     table and return the scalar result directly
     """
-    # colName = None
-    # if col is None:
-    #   colName = self.columns[0]
-    # else:
-    #   colName = col
-    colName = col
-    
-    if func == AggregateType.MEAN:
-      funcStr = "avg"
-    else:
-      funcStr = str(func).lower()[len("aggregatetype."):]
-
-    funcCode = f"{funcStr}({colName})"  
 
     # if isinstance(df, Grouping):
     #   newOp = Grouping(self.op.groupcols, self.op.parent)
@@ -128,22 +115,40 @@ class RelationalExecutor(object):
     #   return DataFrame(self.columns, newOp)
       
     # else:
-    return self._doExecAgg(funcCode, df)
+    return self._doExecAgg(func, col, df)
 
-  def _doExecAgg(self, funcCode, df):
-    """
-    Really executes the aggregation and returns the single result
-    """
+  def _getFuncCode(self,func, col):
+    colName = col
+    
+    if func == AggregateType.MEAN:
+      funcStr = "avg"
+    else:
+      funcStr = str(func).lower()[len("aggregatetype."):]
 
+    funcCode = f"{funcStr}({colName})"
+    return funcCode
+
+  def _gen_agg(self, func, col, df):
+    funcCode = self._getFuncCode(func, col)
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
+
+    # FIXME: we should give "generate" the additional function code to include 
+    # in the generated projection list
     if df.parents:
-      innerSQL = self.generate(df.parents[0])
+      innerSQL = self.generate(df)
       aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
     else:
       aggSQL = f"SELECT {funcCode} FROM {df.table}"
-    
+
+    return aggSQL
+
+  def _doExecAgg(self, func, col, df):
+    """
+    Really executes the aggregation and returns the single result
+    """
+    aggSQL = self._gen_agg(func, col, df)
     # execute an SQL query and get the result set
     rs = self._execute(aggSQL)
     #fetch first (and only) row, return first column only

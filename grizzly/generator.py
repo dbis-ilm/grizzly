@@ -49,5 +49,9 @@ class GrizzlyGenerator(object):
 
     
   @staticmethod
-  def aggregate(df, func, col):
+  def aggregate(df, col, func):
     return GrizzlyGenerator._backend._execAgg(df, func, col)
+
+  @staticmethod
+  def _gen_aggregate(df, col, func):
+    return GrizzlyGenerator._backend._gen_agg(func, col, df)
