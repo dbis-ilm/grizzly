@@ -9,8 +9,8 @@ class RelationalExecutor(object):
     self.connection = connection
     self.sqlGenerator = sqlGenerator
 
-  def generate(self, df):
-    return self.sqlGenerator.generate(df)
+  def generate(self, df, aggFunc = None):
+    return self.sqlGenerator.generate(df, aggFunc)
 
   def _execute(self, sql):
     cursor = self.connection.cursor()
@@ -137,8 +137,9 @@ class RelationalExecutor(object):
     # FIXME: we should give "generate" the additional function code to include 
     # in the generated projection list
     if df.parents:
-      innerSQL = self.generate(df)
-      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
+      innerSQL = self.generate(df, funcCode)
+      # aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
+      aggSQL = innerSQL
     else:
       aggSQL = f"SELECT {funcCode} FROM {df.table}"
 

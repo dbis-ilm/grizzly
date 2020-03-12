@@ -8,13 +8,13 @@ import string
 
 class Query:
 
-  def __init__(self):
+  def __init__(self, groupagg = None):
     self.filters = []
     self.projections = None
     self.doDistinct = False
     self.table = None
     self.groupcols = []
-    self.groupagg = None
+    self.groupagg = groupagg
     self.joins = []
 
   def _reset(self):
@@ -120,7 +120,10 @@ class Query:
       if self.groupcols and not self.projections.issubset(self.groupcols):
         raise ValueError("Projection list must be subset of group columns")
 
-      projs = ', '.join(self.projections)
+      if self.groupagg is not None:
+        self.projections.append(self.groupagg)
+
+      projs = ', '.join(self.projections) 
 
     grouping = ""
     if self.groupcols:
@@ -143,6 +146,6 @@ class Query:
 
 class SQLGenerator:
 
-  def generate(self, df):
-    qry = Query()
+  def generate(self, df, aggFunc = None):
+    qry = Query(aggFunc)
     return qry._buildFrom(df)
