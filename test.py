@@ -370,6 +370,14 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(dfLen, rowsLen) # column names + top rule + bottom rule
 
+  def test_ViewJoin(self):
+    df1 = grizzly.read_table("t1")
+    df2 = grizzly.read_table("t2")
+    
+    j  = df1.join(df2, on = (df1.actor1name == df2.actor2name) | (df1["actor1countrycode"] <= df2["actor2countrycode"]), how="left outer")
+    cnt = j.count()
+    self.assertEqual(cnt, 9899259)
+
 
 if __name__ == "__main__":
     unittest.main()
