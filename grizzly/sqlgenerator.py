@@ -120,9 +120,6 @@ class Query:
       if self.groupcols and not self.projections.issubset(self.groupcols):
         raise ValueError("Projection list must be subset of group columns")
 
-      if self.groupagg is not None:
-        self.projections.append(self.groupagg)
-
       projs = ', '.join(self.projections) 
 
     grouping = ""
@@ -132,6 +129,12 @@ class Query:
 
       if projs == "*":
         projs = theColRefs
+
+    if self.groupagg is not None:
+      if projs == "*":
+        projs = self.groupagg
+      else:
+        projs = projs + "," +self.groupagg
 
     if self.doDistinct:
       projs = "distinct " + projs

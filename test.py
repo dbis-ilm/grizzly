@@ -65,7 +65,7 @@ class DataFrameTest(CodeMatcher):
     g = df.groupby(["year","actor1name"])
     a = g._gen_count("actor2name")
     
-    expected = "select $t0.year, $t0.actor1name, count($t0.actor2name) from events $t0 group by $t0.year, $0.actor1name"
+    expected = "select $t0.year, $t0.actor1name, count($t0.actor2name) from events $t0 group by $t0.year, $t0.actor1name"
     actual = a
 
     self.matchSnipped(actual, expected)
@@ -144,12 +144,20 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == 476829606]
     g = df.groupby(["year","monthyear"])
 
+    aggActual = g._gen_count("actor2geo_type")
+    print(aggActual)
+    aggExpected = "select $t0.year, $t0.monthyear, count($t0.actor2geo_type) from events $t0 where $t0.globaleventid = 476829606 group by $t0.year, $t0.monthyear"
+
+    self.matchSnipped(aggActual, aggExpected)
+
     a = g.count("actor2geo_type")
-    
+    self.assertEqual(a, 1)
+
+
     gActual = g.generate()
     gExpected = "select $t0.year, $t0.monthyear from events $t0 where $t0.globaleventid = 476829606 group by $t0.year, $t0.monthyear"
 
-    self.assertEqual(a,1)
+    
     self.matchSnipped(gActual, gExpected)
 
 

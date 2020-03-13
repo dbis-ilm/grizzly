@@ -193,20 +193,34 @@ class DataFrame(object):
     colName = "*"
     if col is not None:
       colName = col
-    # return self._execAgg("count",colName)
+    
+    grp = self._hasGrouping()
+    if grp is not None:
+      grp.aggFunc = (col, AggregateType.COUNT)
+
+
     return GrizzlyGenerator.aggregate(self, colName, AggregateType.COUNT)
 
   def _gen_count(self, col=None):
     colName = "*"
     if col is not None:
       colName = col
-    # return self._execAgg("count",colName)
+    
     return GrizzlyGenerator._gen_aggregate(self, colName, AggregateType.COUNT)
 
 
   def sum(self , col):
     return GrizzlyGenerator.aggregate(self, col, AggregateType.SUM)
     # return self._execAgg("sum", col)
+
+
+  def _hasGrouping(self):
+    curr = self
+    while curr != None:
+      if isinstance(curr, Grouping):
+        return curr
+
+    return None
 
   ###################################
   # show functions
@@ -257,6 +271,8 @@ class Grouping(DataFrame):
       self.groupCols = [ColRef(col, parent) for col in groupCols]
     else:
       self.groupCols = groupCols
+    
+    self.aggFunc = None
 
     super().__init__(self.groupCols, parent, parent.alias)
 

@@ -18,13 +18,13 @@ class Expr(object):
 
 class ColRef(object):
   def __init__(self, column, df):
-    if not df.hasColumn(column):
-      raise ExpressionException(f"No such column: {column}")
+    # if column != "*" and not df.hasColumn(column):
+    #   raise ExpressionException(f"No such column: {column}")
     self.column = column
     self.df = df
 
   def __str__(self):
-    if self.df.alias:
+    if self.df.alias and self.column != "*":
       s = f"{self.df.alias}.{self.column}"
     else:
       s = self.column

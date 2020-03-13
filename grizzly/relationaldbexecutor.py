@@ -1,6 +1,8 @@
 from grizzly.aggregates import AggregateType
 
+from grizzly.expression import ColRef
 from grizzly.sqlgenerator import SQLGenerator
+
 
 class RelationalExecutor(object):
   
@@ -117,8 +119,8 @@ class RelationalExecutor(object):
     # else:
     return self._doExecAgg(func, col, df)
 
-  def _getFuncCode(self,func, col):
-    colName = col
+  def _getFuncCode(self,func, col, df):
+    colName = ColRef(col, df)
     
     if func == AggregateType.MEAN:
       funcStr = "avg"
@@ -129,13 +131,11 @@ class RelationalExecutor(object):
     return funcCode
 
   def _gen_agg(self, func, col, df):
-    funcCode = self._getFuncCode(func, col)
+    funcCode = self._getFuncCode(func, col, df)
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
 
-    # FIXME: we should give "generate" the additional function code to include 
-    # in the generated projection list
     if df.parents:
       innerSQL = self.generate(df, funcCode)
       # aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
