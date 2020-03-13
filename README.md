@@ -114,27 +114,36 @@ FROM t1 _t0
 
 ### Grouping & Aggregation
 
-You can also group the data on multiple columns and compute an aggregate over the groups:
+You can also group the data on multiple columns and compute an aggregate over the groups using `agg`:
 
 ```python
+from grizzly.aggregates import AggregateType
 df = grizzly.read_table("events")
 g = df.groupby(["year","actor1name"])
 
-a = g.count("actor2name")
+a = g.agg(col="actor2name", aggType=AggregateTyoe.COUNT)
 ```
 
-If no aggregation function is used an `show()` is called, only the grouping columns are selected.
-You can apply aggregation functions on non-grouped `DataFrame`s of course. In this case the aggregates will be computed for the whole content.
-
-Thus, `a.sql()` will give
+Here, `a` represents a DataFrame with three columns: `year`, `monthyear` and the `count` value. In the above example, `a.generate()` will give
 
 ```sql
-SELECT  events.year, events.actor1name, count(actor2name) 
-FROM events
-GROUP BY events.year, events.actor1name
+SELECT _t0.year, _t0.actor1name, count(_t0.actor2name)
+FROM events _t0 
+GROUP BY _t0.year, _t0.actor1name
 ```
 
-, whereas `df.count()` (i.e. before the grouping) for the above piece of code will return the single scalar value with the number of records in `df` (22225).
+If no aggregation function and projection is used, only the grouping columns are selected upon query generation.
+
+You can apply aggregation functions on non-grouped `DataFrame`s of course. In this case the aggregates will be computed for the whole content. For example, `g.count()` immediately runs the following query and returns the scalar value
+```sql
+SELECT count(*) FROM (
+    SELECT _t0.year, _t0.actor1name
+    FROM events _t0 
+    GROUP BY _t0.year, _t0.actor1name
+    ) _t1
+```
+
+A `df.count()` (i.e. before the grouping) for the above piece of code will return the single scalar value with the number of records in `df` (22225).
 The query executed for this is:
 
 ```sql
@@ -142,12 +151,15 @@ SELECT count(*)
 FROM events
 ```
 
+Note, currently Grizzly supports predefined aggregations only. They are defined as constants in the `AggregateType` class: `MIN`, `MAX`, `MEAN`, `SUM`, `COUNT`. 
+We are working on adding support for (arbitrary) user-defined functions (see below).
+
 ### SQL
 
-You can inspect the produced SQL string with `sql()`:
+You can inspect the produced query string (in this case SQL) with `generate()`:
 
 ```python
-print(df.sql())
+print(df.generate())
 ```
 
 

@@ -1,3 +1,4 @@
+from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Table, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import ColRef, Expr
 
@@ -8,13 +9,13 @@ import string
 
 class Query:
 
-  def __init__(self, groupagg = None):
+  def __init__(self):
     self.filters = []
     self.projections = None
     self.doDistinct = False
     self.table = None
     self.groupcols = []
-    self.groupagg = groupagg
+    self.groupagg = set()
     self.joins = []
 
   def _reset(self):
@@ -23,7 +24,7 @@ class Query:
     self.doDistinct = False
     self.table = None
     self.groupcols = []
-    self.groupagg = None
+    self.groupagg = set()
     self.joins = []
 
   def _doExprToSQL(self, expr):
@@ -82,8 +83,6 @@ class Query:
         self.filters.append(exprStr)
 
       elif isinstance(curr, Join):
-        # rtVar = DataFrame._incrAndGetTupleVar()
-        
 
         if isinstance(curr.right, Table):
           rightSQL = curr.right.table
@@ -106,6 +105,11 @@ class Query:
       elif isinstance(curr, Grouping):
         self.groupcols = [str(attr) for attr in curr.groupCols]
 
+        if curr.aggFunc:
+          (func, col) = curr.aggFunc
+          funcCode = SQLGenerator._getFuncCode(func, col, curr) 
+          self.groupagg.add(funcCode)
+
       if curr.parents is None:
         curr = None
       else:
@@ -117,7 +121,7 @@ class Query:
     
     projs = "*"
     if self.projections:
-      if self.groupcols and not self.projections.issubset(self.groupcols):
+      if self.groupcols and not set(self.projections).issubset(self.groupcols):
         raise ValueError("Projection list must be subset of group columns")
 
       projs = ', '.join(self.projections) 
@@ -130,11 +134,11 @@ class Query:
       if projs == "*":
         projs = theColRefs
 
-    if self.groupagg is not None:
+    if len(self.groupagg) > 0:
       if projs == "*":
         projs = self.groupagg
-      else:
-        projs = projs + "," +self.groupagg
+      elif len(self.groupagg) > 0:
+        projs = projs + "," + ",".join(self.groupagg)
 
     if self.doDistinct:
       projs = "distinct " + projs
@@ -149,6 +153,21 @@ class Query:
 
 class SQLGenerator:
 
-  def generate(self, df, aggFunc = None):
-    qry = Query(aggFunc)
+  @staticmethod
+  def _getFuncCode(func, col, df):
+    if not isinstance(col, ColRef):
+      colName = ColRef(col, df)
+    else:
+      colName = col
+    
+    if func == AggregateType.MEAN:
+      funcStr = "avg"
+    else:
+      funcStr = str(func).lower()[len("aggregatetype."):]
+
+    funcCode = f"{funcStr}({colName})"
+    return funcCode
+
+  def generate(self, df):
+    qry = Query()
     return qry._buildFrom(df)

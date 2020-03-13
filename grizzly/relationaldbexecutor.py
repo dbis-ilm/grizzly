@@ -1,8 +1,6 @@
-from grizzly.aggregates import AggregateType
-
 from grizzly.expression import ColRef
 from grizzly.sqlgenerator import SQLGenerator
-
+from grizzly.generator import GrizzlyGenerator
 
 class RelationalExecutor(object):
   
@@ -11,13 +9,20 @@ class RelationalExecutor(object):
     self.connection = connection
     self.sqlGenerator = sqlGenerator
 
-  def generate(self, df, aggFunc = None):
-    return self.sqlGenerator.generate(df, aggFunc)
+  def generate(self, df):
+    return self.sqlGenerator.generate(df)
 
   def _execute(self, sql):
     cursor = self.connection.cursor()
-    cursor.execute(sql)
-    return cursor
+    try:
+      cursor.execute(sql)
+    except Exception as e:
+      print("Failed to execute query.")
+      print(f"Reasong: {e}")
+      print(f"Query:\n{sql}")
+    finally:
+      return cursor  
+    
 
   def close(self):
     self.connection.close()
@@ -98,7 +103,6 @@ class RelationalExecutor(object):
     sql = self.sqlGenerator.generate(df)
     return self._execute(sql)
 
-
   def _execAgg(self, df, func, col):
     """
     Actually compute the aggregation function.
@@ -119,29 +123,21 @@ class RelationalExecutor(object):
     # else:
     return self._doExecAgg(func, col, df)
 
-  def _getFuncCode(self,func, col, df):
-    colName = ColRef(col, df)
-    
-    if func == AggregateType.MEAN:
-      funcStr = "avg"
-    else:
-      funcStr = str(func).lower()[len("aggregatetype."):]
-
-    funcCode = f"{funcStr}({colName})"
-    return funcCode
-
   def _gen_agg(self, func, col, df):
-    funcCode = self._getFuncCode(func, col, df)
+    
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
 
     if df.parents:
-      innerSQL = self.generate(df, funcCode)
-      # aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as t"
-      aggSQL = innerSQL
+      innerSQL = self.generate(df)
+      df.alias = GrizzlyGenerator._incrAndGetTupleVar()
+      funcCode = SQLGenerator._getFuncCode(func, col, df)
+      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      # aggSQL = innerSQL
     else:
-      aggSQL = f"SELECT {funcCode} FROM {df.table}"
+      funcCode = SQLGenerator._getFuncCode(func, col, df)
+      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
 
     return aggSQL
 

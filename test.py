@@ -4,6 +4,7 @@ import sqlite3
 import re
 
 import grizzly
+from grizzly.aggregates import AggregateType
 from grizzly.sqlgenerator import SQLGenerator
 from grizzly.relationaldbexecutor import RelationalExecutor
 
@@ -63,10 +64,10 @@ class DataFrameTest(CodeMatcher):
   def test_groupby(self):
     df = grizzly.read_table("events")
     g = df.groupby(["year","actor1name"])
-    a = g._gen_count("actor2name")
+    a = g.agg(col="actor2name", aggType=AggregateType.MEAN)
     
-    expected = "select $t0.year, $t0.actor1name, count($t0.actor2name) from events $t0 group by $t0.year, $t0.actor1name"
-    actual = a
+    expected = "select $t0.year, $t0.actor1name, avg($t0.actor2name) from events $t0 group by $t0.year, $t0.actor1name"
+    actual = a.generate()
 
     self.matchSnipped(actual, expected)
 
@@ -87,7 +88,7 @@ class DataFrameTest(CodeMatcher):
 
   def test_selectStar(self):
     df = grizzly.read_table("events") 
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0"
     self.matchSnipped(actual, expected)
 
@@ -100,7 +101,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 468189636]
 
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid = 468189636"
 
     self.matchSnipped(actual, expected)
@@ -109,7 +110,7 @@ class DataFrameTest(CodeMatcher):
   def test_selectStarFilterString(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 'abc']
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid = 'abc'"
 
     self.matchSnipped(actual, expected)
@@ -119,7 +120,7 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == 468189636]
     df = df['goldsteinscale']
 
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select $t0.goldsteinscale from events $t0 where $t0.globaleventid = 468189636"
 
     self.matchSnipped(actual, expected)
@@ -134,7 +135,7 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == '468189636']
     g = df.groupby(["year","monthyear"])
 
-    actual = g.generate().lower().strip()
+    actual = g.generate()
     expected = "select $t0.year, $t0.monthyear from events $t0 where $t0.globaleventid = '468189636' group by $t0.year, $t0.monthyear"
 
     self.matchSnipped(actual, expected)
@@ -144,25 +145,42 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == 476829606]
     g = df.groupby(["year","monthyear"])
 
-    aggActual = g._gen_count("actor2geo_type")
-    print(aggActual)
+    agged = g.agg(col="actor2geo_type", aggType=AggregateType.COUNT)
+    
+    aggActual = agged.generate()
     aggExpected = "select $t0.year, $t0.monthyear, count($t0.actor2geo_type) from events $t0 where $t0.globaleventid = 476829606 group by $t0.year, $t0.monthyear"
 
     self.matchSnipped(aggActual, aggExpected)
 
-    a = g.count("actor2geo_type")
-    self.assertEqual(a, 1)
+    
 
 
-    gActual = g.generate()
-    gExpected = "select $t0.year, $t0.monthyear from events $t0 where $t0.globaleventid = 476829606 group by $t0.year, $t0.monthyear"
+    # gActual = g.generate()
+    # gExpected = "select $t0.year, $t0.monthyear from events $t0 where $t0.globaleventid = 476829606 group by $t0.year, $t0.monthyear"
 
     
-    self.matchSnipped(gActual, gExpected)
+    # self.matchSnipped(gActual, gExpected)
 
 
-    m = g.mean("avgtone")
-    self.assertEqual(m, 0.909090909090911)
+    # m = g.mean("avgtone")
+    # self.assertEqual(m, 0.909090909090911)
+
+  def test_groupByTableAgg(self):
+    df = grizzly.read_table("events") 
+    df = df[df['globaleventid'] == 476829606]
+    g = df.groupby(["year","monthyear"])
+
+    a = g.count("monthyear")
+    # print(f"cnt: {a}")
+    self.assertEqual(a, 1)
+
+  def test_groupByTableAggStar(self):
+    df = grizzly.read_table("events") 
+    g = df.groupby("year")
+
+    a = g.count()
+    # print(f"cnt: {a}")
+    self.assertEqual(a, 3)
 
   def test_joinTest(self):
     df = grizzly.read_table("events") 
@@ -210,14 +228,14 @@ class DataFrameTest(CodeMatcher):
   def test_DistinctAll(self):
     df = grizzly.read_table("events")
     df = df.distinct()
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "SELECT distinct * FROM events $t1".lower()
     self.matchSnipped(actual, expected)
 
   def test_DistinctOneCol(self):
     df = grizzly.read_table("events")
     df = df['isrootevent'].distinct()
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     # print(actual)
     expected = "select distinct $t1.isrootevent from events $t1"
     
@@ -227,22 +245,22 @@ class DataFrameTest(CodeMatcher):
   def test_DistinctTwoCols(self):
     df = grizzly.read_table("events")
     df = df[['y',"x"]].distinct()
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select distinct $t0.y, $t0.x from events $t0"
     self.matchSnipped(actual, expected)
-    # print(df[['y',"x"]].distinct().sql().lower().strip())
+    # print(df[['y',"x"]].distinct().sql())
 
   def test_Eq(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 468189636]
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid = 468189636"
     self.matchSnipped(actual, expected)
 
   def test_Ne(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] != 468189636]
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid <> 468189636"
 
     self.matchSnipped(actual, expected)
@@ -250,14 +268,14 @@ class DataFrameTest(CodeMatcher):
   def test_Lt(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] < 468189636]
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid < 468189636"
     self.matchSnipped(actual, expected)
 
   def test_Le(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] <= 468189636]
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid <= 468189636"
 
     self.matchSnipped(actual, expected)
@@ -265,7 +283,7 @@ class DataFrameTest(CodeMatcher):
   def test_Gt(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] > 468189636]
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid > 468189636"
 
     self.matchSnipped(actual, expected)
@@ -273,7 +291,7 @@ class DataFrameTest(CodeMatcher):
   def test_Ge(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] >= 468189636]
-    actual = df.generate().lower().strip()
+    actual = df.generate()
     expected = "select * from events $t0  where $t0.globaleventid >= 468189636"
     self.matchSnipped(actual, expected)
 
@@ -346,7 +364,7 @@ class DataFrameTest(CodeMatcher):
     splt = strDF.split("\n")
 
     rows = df.count()
-
+    # print(rows)
     dfLen = len(splt)
     rowsLen = rows+ 3
 

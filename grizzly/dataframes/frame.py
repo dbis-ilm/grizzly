@@ -56,6 +56,8 @@ class DataFrame(object):
     return Join(self, other, on, how, comp)
 
   def groupby(self, groupCols):
+    if not isinstance(groupCols, list):
+      groupCols = [groupCols]
     return Grouping(groupCols, self)
 
   ###################################
@@ -194,11 +196,6 @@ class DataFrame(object):
     if col is not None:
       colName = col
     
-    grp = self._hasGrouping()
-    if grp is not None:
-      grp.aggFunc = (col, AggregateType.COUNT)
-
-
     return GrizzlyGenerator.aggregate(self, colName, AggregateType.COUNT)
 
   def _gen_count(self, col=None):
@@ -216,9 +213,15 @@ class DataFrame(object):
 
   def _hasGrouping(self):
     curr = self
-    while curr != None:
+    while curr is not None:
       if isinstance(curr, Grouping):
         return curr
+
+      # FIXME: how to handle join paths?
+      if curr.parents is not None:
+        curr = curr.parents[0]
+      else:
+        curr = None
 
     return None
 
@@ -275,6 +278,10 @@ class Grouping(DataFrame):
     self.aggFunc = None
 
     super().__init__(self.groupCols, parent, parent.alias)
+
+  def agg(self, aggType, col):
+    self.aggFunc = (aggType, col)
+    return self
 
 class Join(DataFrame):
   def __init__(self, parent, other, on, how, comp):
