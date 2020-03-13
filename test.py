@@ -319,7 +319,7 @@ class DataFrameTest(CodeMatcher):
       bkp = sys.stdout
       sys.stdout = mystdout = StringIO()
 
-      df.show()
+      df.show(limit=None)
 
       output = mystdout.getvalue().splitlines()
 

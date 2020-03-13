@@ -25,11 +25,11 @@ class GrizzlyGenerator(object):
 
 
   @staticmethod
-  def toString(df, delim=",", pretty=False, maxColWidth=20):
+  def toString(df, delim=",", pretty=False, maxColWidth=20, limit=20):
     """
     Call the underlying generator, execute the query and return string representation
     """
-    return GrizzlyGenerator._backend.toString(df,delim,pretty,maxColWidth)
+    return GrizzlyGenerator._backend.toString(df,delim,pretty,maxColWidth,limit)
 
   @staticmethod
   def table(df):

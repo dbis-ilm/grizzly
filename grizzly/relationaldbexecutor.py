@@ -51,7 +51,7 @@ class RelationalExecutor(object):
     rs.close()
     return str(table)
 
-  def toString(self, df, delim=",", pretty=False, maxColWidth=20):
+  def toString(self, df, delim=",", pretty=False, maxColWidth=20, limit=20):
     rs = self.execute(df)
 
     cols = [dec[0] for dec in rs.description]
@@ -59,10 +59,17 @@ class RelationalExecutor(object):
 
     if not pretty:
       strings = [delim.join(cols)]
+      cnt = 0
       for row in rs:
-        strings.append(delim.join([str(col) for col in row]))
+        if limit is None or cnt < limit:
+          strings.append(delim.join([str(col) for col in row]))
+        cnt += 1
 
       rs.close()
+
+      if  limit is not None and cnt > limit and cnt - limit > 0:
+        strings.append(f"and {cnt - limit} more...")
+
       return "\n".join(strings)
     else:
       firstRow = rs.fetchone()
@@ -84,11 +91,18 @@ class RelationalExecutor(object):
         return rowFormat.format(*values)
 
       resultRep = [formatRow(cols), formatRow(firstRow)]
-      
+      cnt = 0
       for row in rs:
-        resultRep.append(formatRow(row))
+        if  limit is None or cnt < limit:
+          resultRep.append(formatRow(row))
+
+        cnt += 1
 
       rs.close()
+
+      if limit is not None and cnt > limit and cnt - limit > 0:
+        resultRep.append(f"and {cnt - limit} more...")
+
       return "\n".join(resultRep)
 
   def execute(self, df):

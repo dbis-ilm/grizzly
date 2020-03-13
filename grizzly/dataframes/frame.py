@@ -210,29 +210,14 @@ class DataFrame(object):
     return GrizzlyGenerator.aggregate(self, col, AggregateType.SUM)
     # return self._execAgg("sum", col)
 
-
-  def _hasGrouping(self):
-    curr = self
-    while curr is not None:
-      if isinstance(curr, Grouping):
-        return curr
-
-      # FIXME: how to handle join paths?
-      if curr.parents is not None:
-        curr = curr.parents[0]
-      else:
-        curr = None
-
-    return None
-
   ###################################
   # show functions
 
   def generate(self):
     return GrizzlyGenerator.generate(self)
 
-  def show(self, pretty=False, delim=",", maxColWidth=20):
-    print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth))
+  def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
+    print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
     
   def __str__(self):
     # strRep = GrizzlyGenerator.toString(self, pretty=True)
