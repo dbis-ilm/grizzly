@@ -4,13 +4,13 @@ from grizzly.generator import GrizzlyGenerator
 
 class RelationalExecutor(object):
   
-  def __init__(self, connection, sqlGenerator=SQLGenerator()):
+  def __init__(self, connection, queryGenerator=SQLGenerator()):
     super().__init__()
     self.connection = connection
-    self.sqlGenerator = sqlGenerator
+    self.queryGenerator = queryGenerator
 
   def generate(self, df):
-    return self.sqlGenerator.generate(df)
+    return self.queryGenerator.generate(df)
 
   def _execute(self, sql):
     cursor = self.connection.cursor()
@@ -113,10 +113,10 @@ class RelationalExecutor(object):
     set the delimiter. Non-pretty mode ignores the maxColWidth parameter.
     """
 
-    sql = self.sqlGenerator.generate(df)
+    sql = self.queryGenerator.generate(df)
     return self._execute(sql)
 
-  def _execAgg(self, df, func, col):
+  def _execAgg(self, df, col, func):
     """
     Actually compute the aggregation function.
 
@@ -127,39 +127,17 @@ class RelationalExecutor(object):
     table and return the scalar result directly
     """
 
-    # if isinstance(df, Grouping):
-    #   newOp = Grouping(self.op.groupcols, self.op.parent)
-    #   newOp.setAggFunc(funcCode)
-      
-    #   return DataFrame(self.columns, newOp)
-      
-    # else:
-    return self._doExecAgg(func, col, df)
+    return self._doExecAgg(df, col, func)
 
-  def _gen_agg(self, func, col, df):
-    
-    # aggregation over a table is performed in a way that the actual query
-    # that was built is executed as an inner query and around that, we 
-    # compute the aggregation
+  def _gen_agg(self, df, col, func):
+    return self.queryGenerator._generateAggCode(df, col, func)
 
-    if df.parents:
-      innerSQL = self.generate(df)
-      df.alias = GrizzlyGenerator._incrAndGetTupleVar()
-      funcCode = SQLGenerator._getFuncCode(func, col, df)
-      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
-      # aggSQL = innerSQL
-    else:
-      funcCode = SQLGenerator._getFuncCode(func, col, df)
-      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
-
-    return aggSQL
-
-  def _doExecAgg(self, func, col, df):
+  def _doExecAgg(self, df, col, func):
     """
     Really executes the aggregation and returns the single result
     """
-    aggSQL = self._gen_agg(func, col, df)
+    aggQry = self.queryGenerator._generateAggCode(df, col, func)
     # execute an SQL query and get the result set
-    rs = self._execute(aggSQL)
+    rs = self._execute(aggQry)
     #fetch first (and only) row, return first column only
     return rs.fetchone()[0]  

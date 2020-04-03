@@ -99,7 +99,7 @@ class DataFrame(object):
 
   def __eq__(self, other):
     if not isinstance(self, Projection) or len(self.attrs) != 1:
-      raise ExpressionException("Must have a projection with exactly one attribute")
+      raise ExpressionException(f"Must have a projection with exactly one attribute. Got {type(self)}")
 
     if isinstance(other, DataFrame):
       r = other.attrs[0]

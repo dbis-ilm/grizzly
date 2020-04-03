@@ -107,7 +107,7 @@ class Query:
 
         if curr.aggFunc:
           (func, col) = curr.aggFunc
-          funcCode = SQLGenerator._getFuncCode(func, col, curr) 
+          funcCode = SQLGenerator._getFuncCode(curr, col, func) 
           self.groupagg.add(funcCode)
 
       if curr.parents is None:
@@ -154,7 +154,7 @@ class Query:
 class SQLGenerator:
 
   @staticmethod
-  def _getFuncCode(func, col, df):
+  def _getFuncCode(df, col, func):
     if not isinstance(col, ColRef):
       colName = ColRef(col, df)
     else:
@@ -167,6 +167,23 @@ class SQLGenerator:
 
     funcCode = f"{funcStr}({colName})"
     return funcCode
+
+  def _generateAggCode(self, df, col, func):
+    # aggregation over a table is performed in a way that the actual query
+    # that was built is executed as an inner query and around that, we 
+    # compute the aggregation
+
+    if df.parents:
+      innerSQL = self.generate(df)
+      df.alias = GrizzlyGenerator._incrAndGetTupleVar()
+      funcCode = SQLGenerator._getFuncCode(df, col, func)
+      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      # aggSQL = innerSQL
+    else:
+      funcCode = SQLGenerator._getFuncCode(df, col, func)
+      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
+
+    return aggSQL
 
   def generate(self, df):
     qry = Query()
