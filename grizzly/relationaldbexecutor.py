@@ -17,7 +17,7 @@ class RelationalExecutor(object):
     try:
       cursor.execute(sql)
     except Exception as e:
-      print("Failed to execute query. Reason: {e}")
+      print(f"Failed to execute query. Reason: {e}")
       print(f"Query: {sql}")
     finally:
       return cursor  

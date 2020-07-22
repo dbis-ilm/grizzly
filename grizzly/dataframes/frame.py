@@ -1,6 +1,9 @@
 from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
+from grizzly.expression import UDF, Param
+
+import inspect
 ###########################################################################
 # Base DataFrame with common operations
 
@@ -60,12 +63,55 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
+  def map(self, func) -> UDF:
+    
+
+    if inspect.isfunction(func):
+
+      funcName = func.__name__
+
+      sig = inspect.signature(func)
+      fparams = sig.parameters
+      params = []
+      for fp in fparams:
+        fptype = sig.parameters[fp].annotation.__name__
+        p = Param(fp,fptype)
+        params.append(p)
+
+      (lines,_) = inspect.getsourcelines(func)
+
+      returns = sig.return_annotation.__name__
+
+      print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
+
+      udf = UDF(funcName, params, lines[1:], returns)
+      return udf
+    elif isinstance(DataFrame):
+      # TODO: perform natural join
+      print("map with DataFrame not implemented yet")
+      exit(2)
+    else:
+      print(f"error: {func} is not a function or other DataFrame")
+      exit(1)
+
   ###################################
   # shortcuts
 
   def __getattr__(self, name):
     return self.project([ColRef(name, self)])
 
+  # magic function for write access by index: []
+  def __setitem__(self, key, value):
+    if isinstance(value, UDF):
+      # # FIXME: make sure referenced columns exist in current schema
+      cols = ",".join(str(p) for p in value.params)
+      newCol = ColRef(f"{value.name}({cols})", self, key)
+    else:
+      newCol = ColRef(value, self, key)
+
+    return self.project(self.columns.append(newCol))
+
+  # magic function for read access by index: []
   def __getitem__(self, key):
     theType = type(key)
 

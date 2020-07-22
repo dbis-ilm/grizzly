@@ -83,8 +83,10 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actualDF, expectedDF)
 
-    actualDF3 = df3.generate()
-    expectedDF3 = "select $t0.a from events $t0 inner join (select * from events $t1) $t2 on $t0.a = $t2.a where $t0.a = 2"
+    # actualDF3 = df3.generate()
+    # expectedDF3 = "select $t0.a from events $t0 inner join (select * from events $t1) $t2 on $t0.a = $t2.a where $t0.a = 2"
+
+    # self.matchSnipped(actualDF3, expectedDF3)
 
   def test_selectStar(self):
     df = grizzly.read_table("events") 
@@ -378,6 +380,27 @@ class DataFrameTest(CodeMatcher):
     cnt = j.count()
     self.assertEqual(cnt, 9899259)
 
+  def test_udf(self):
+
+    # function must have "return annotation" so that we know 
+    # what the result would be
+    # parameters should also contain type annotation, e.g. 'a: int'
+    # or may be named after the actual column (postgres lets you define the type
+    # by referencing the column with `mytable.mycolumn%TYPE`)
+    def myfunc(a: int) -> str:
+      return a+"_grizzly"
+    
+    df = grizzly.read_table("events") 
+    # df["newid"] = [df['globaleventid'] == 467268277]
+    df["newid"] = df["globaleventid"].map(myfunc)
+
+    print(df.generate())
+
+
+  def test_udflambda(self):
+    df = grizzly.read_table("events") 
+    # df["newid"] = [df['globaleventid'] == 467268277]
+    df["globaleventid"].map(lambda x: x+"grizzlylambda")
 
 if __name__ == "__main__":
     unittest.main()
