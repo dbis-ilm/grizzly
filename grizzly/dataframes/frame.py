@@ -103,7 +103,7 @@ class DataFrame(object):
   # magic function for write access by index: []
   def __setitem__(self, key, value):
     if isinstance(value, UDF):
-      # # FIXME: make sure referenced columns exist in current schema
+      # FIXME: make sure referenced columns exist in current schema
       cols = ",".join(str(p) for p in value.params)
       newCol = ColRef(f"{value.name}({cols})", self, key)
     else:
