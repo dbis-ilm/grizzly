@@ -60,8 +60,12 @@ class Query:
 
   def _buildFrom(self,df):
 
+    computedCols = []
+
     curr = df
     while curr is not None:
+
+      computedCols += curr.computedCols        
 
       if isinstance(curr,Table):
         self.table = f"{curr.table} {curr.alias}"
@@ -72,6 +76,7 @@ class Query:
           if not self.projections:
             self.projections = prefixed
           else:
+            # FIXME: does this work? no return, no assignment
             set(self.projections).intersection(set(prefixed))
         
 
@@ -125,6 +130,12 @@ class Query:
         raise ValueError("Projection list must be subset of group columns")
 
       projs = ', '.join(self.projections) 
+
+    if computedCols:
+      computedStr = ", ".join([str(c) for c in computedCols])
+      # TODO: this is not really correct if after the map we apply a projection to only this
+      # computed attribute
+      projs += ", "+computedStr
 
     grouping = ""
     if self.groupcols:

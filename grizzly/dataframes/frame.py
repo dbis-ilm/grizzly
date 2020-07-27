@@ -1,4 +1,4 @@
-from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, ExpressionException
+from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, FuncCall, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
 from grizzly.expression import UDF, Param
@@ -14,6 +14,7 @@ class DataFrame(object):
 
     self.alias = alias
     self.columns = columns
+    self.computedCols = []
 
     if parents is None or type(parents) is list:
       self.parents = parents
@@ -63,12 +64,15 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
-  def map(self, func) -> UDF:
+  def map(self, func):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
-    if inspect.isfunction(func):
+    if not isinstance(self, Projection):
+        ValueError("functions can only be applied to projections currently")
 
+
+    if inspect.isfunction(func):
       funcName = func.__name__
 
       sig = inspect.signature(func)
@@ -86,8 +90,11 @@ class DataFrame(object):
       print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
 
       udf = UDF(funcName, params, lines[1:], returns)
-      return udf
-    elif isinstance(DataFrame):
+      call = FuncCall(funcName, self.attrs, self, udf)
+
+      return self.project([call])
+
+    elif isinstance(self, DataFrame):
       # TODO: perform natural join
       print("map with DataFrame not implemented yet")
       exit(2)
@@ -103,18 +110,18 @@ class DataFrame(object):
 
   # magic function for write access by index: []
   def __setitem__(self, key, value):
-    if isinstance(value, UDF):
-      # FIXME: make sure referenced columns exist in current schema
-      cols = ",".join(p.name for p in value.params)
-      newCol = ColRef(f"{value.name}({cols})", self, key)
+    if isinstance(value, Projection):
+      value.attrs[0].alias = key
+      newCol = value.attrs[0]
     else:
       newCol = ColRef(value, self, key)
-
+    
     newCols = self.columns + [newCol]
-    # p = self.project(newCols)
-    # return p
-    # TODO: this might set column for Table DF, which is currently ignored in SQL generator
-    self.columns = newCols
+    
+    # # TODO: this might set column for non-projection DF, which is currently ignored in SQL generator
+    self.computedCols += newCols
+
+
 
   # magic function for read access by index: []
   def __getitem__(self, key):
@@ -288,7 +295,7 @@ class Table(DataFrame):
 class Projection(DataFrame):
 
   def __init__(self, attrs, parent, doDistinct = False):
-    if attrs and not isinstance(attrs[0], ColRef):
+    if attrs and not (isinstance(attrs[0], ColRef) or isinstance(attrs[0], FuncCall)):
       self.attrs = [ColRef(attr, parent) for attr in attrs]
     else:
       self.attrs = attrs

@@ -391,7 +391,7 @@ class DataFrameTest(CodeMatcher):
       return a+"_grizzly"
     
     df = grizzly.read_table("events") 
-    # df["newid"] = [df['globaleventid'] == 467268277]
+    df = df[df['globaleventid'] == 467268277]
     df["newid"] = df["globaleventid"].map(myfunc)
 
     print(df.generate())
