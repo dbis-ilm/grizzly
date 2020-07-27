@@ -64,7 +64,8 @@ class DataFrame(object):
     return Grouping(groupCols, self)
 
   def map(self, func) -> UDF:
-    
+    # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
+    # df.map(myfunc) vs. df['a'].map(myfunc)
 
     if inspect.isfunction(func):
 
@@ -104,12 +105,16 @@ class DataFrame(object):
   def __setitem__(self, key, value):
     if isinstance(value, UDF):
       # FIXME: make sure referenced columns exist in current schema
-      cols = ",".join(str(p) for p in value.params)
+      cols = ",".join(p.name for p in value.params)
       newCol = ColRef(f"{value.name}({cols})", self, key)
     else:
       newCol = ColRef(value, self, key)
 
-    return self.project(self.columns.append(newCol))
+    newCols = self.columns + [newCol]
+    # p = self.project(newCols)
+    # return p
+    # TODO: this might set column for Table DF, which is currently ignored in SQL generator
+    self.columns = newCols
 
   # magic function for read access by index: []
   def __getitem__(self, key):
