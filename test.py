@@ -394,7 +394,8 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == 467268277]
     df["newid"] = df["globaleventid"].map(myfunc)
 
-    print(df.generate())
+    actual = df.generateQuery()
+    print(actual)
 
 
   def test_udflambda(self):

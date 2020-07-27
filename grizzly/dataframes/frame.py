@@ -273,6 +273,10 @@ class DataFrame(object):
 
   def generate(self):
     return GrizzlyGenerator.generate(self)
+  
+  def generateQuery(self):
+    (pre,qry) = self.generate()
+    return f"{pre} {qry}"
 
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
     print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
