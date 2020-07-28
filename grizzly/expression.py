@@ -24,7 +24,7 @@ class Param:
   def __str__(self):
     return f"{self.name}:{self.type}"
 
-class UDF(Expr):
+class UDF(object):
 
   def __init__(self, name: str, params: list, lines: list, returnType: str):
     self.name = name
@@ -36,7 +36,25 @@ class UDF(Expr):
     paramString = ','.join(str(p) for p in self.params)
     return f"{self.name}({paramString}): {self.returnType}"
 
-class ColRef(object):
+class FuncCall(Expr):
+  def __init__(self, funcName: str, inputCols: list, df, udf: UDF, alias: str = ""):
+    self.funcName = funcName
+    self.inputCols = inputCols
+    self.df = df
+    self.udf = udf
+    self.alias = alias
+
+  def __str__(self):
+    cols = [str(c) for c in self.inputCols]
+    colsStr = ", ".join(cols)
+    s = f"{self.funcName}({colsStr})"
+
+    if self.alias != "":
+      s += f" as {self.alias}"
+    
+    return s
+
+class ColRef(Expr):
   def __init__(self, column, df, alias: str = ""):
     # if column != "*" and not df.hasColumn(column):
     #   raise ExpressionException(f"No such column: {column}")

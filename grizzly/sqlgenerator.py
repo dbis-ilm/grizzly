@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import Table, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import ColRef, Expr
+from grizzly.dataframes.frame import UDF, Table, Projection, Filter, Join, Grouping, DataFrame
+from grizzly.expression import FuncCall, ColRef, Expr
 
 from grizzly.generator import GrizzlyGenerator
 
@@ -17,6 +17,7 @@ class Query:
     self.groupcols = []
     self.groupagg = set()
     self.joins = []
+    self.preQueryCode = []
 
   def _reset(self):
     self.filters = []
@@ -26,6 +27,7 @@ class Query:
     self.groupcols = []
     self.groupagg = set()
     self.joins = []
+    self.preQueryCode = []
 
   def _doExprToSQL(self, expr):
     exprSQL = ""
@@ -60,8 +62,12 @@ class Query:
 
   def _buildFrom(self,df):
 
+    computedCols = []
+
     curr = df
     while curr is not None:
+
+      computedCols += curr.computedCols        
 
       if isinstance(curr,Table):
         self.table = f"{curr.table} {curr.alias}"
@@ -72,6 +78,7 @@ class Query:
           if not self.projections:
             self.projections = prefixed
           else:
+            # FIXME: does this work? no return, no assignment
             set(self.projections).intersection(set(prefixed))
         
 
@@ -126,6 +133,14 @@ class Query:
 
       projs = ', '.join(self.projections) 
 
+    if computedCols:
+      computedStr = ", ".join([str(c) for c in computedCols])
+      # TODO: this is not really correct if after the map we apply a projection to only this
+      # computed attribute
+      projs += ", "+computedStr
+
+      self.preQueryCode += [ SQLGenerator._generateCreateFunc(func.udf) for func in computedCols if isinstance(func, FuncCall) ]
+
     grouping = ""
     if self.groupcols:
       theColRefs = ", ".join([str(e) for e in self.groupcols])
@@ -154,6 +169,22 @@ class Query:
 class SQLGenerator:
 
   @staticmethod
+  def _generateCreateFunc(udf: UDF) -> str:
+    paramsStr = ",".join([f"{p.name} {p.type}" for p in udf.params])
+    lines = "\n".join(udf.lines)
+
+    code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr}) 
+      return ({udf.returnType})
+      AS LANGUAGE PYTHON
+      SOURCE='
+      {lines}
+      '
+    """
+
+    return code
+
+
+  @staticmethod
   def _getFuncCode(df, col, func):
     if not isinstance(col, ColRef):
       colName = ColRef(col, df)
@@ -174,10 +205,10 @@ class SQLGenerator:
     # compute the aggregation
 
     if df.parents:
-      innerSQL = self.generate(df)
+      (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      aggSQL = f"{pre};SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
       # aggSQL = innerSQL
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
@@ -185,6 +216,9 @@ class SQLGenerator:
 
     return aggSQL
 
-  def generate(self, df):
+  def generate(self, df) -> (str,str):
     qry = Query()
-    return qry._buildFrom(df)
+    qryString = qry._buildFrom(df)
+    preQry = "\n".join(qry.preQueryCode)
+
+    return (preQry, qryString)

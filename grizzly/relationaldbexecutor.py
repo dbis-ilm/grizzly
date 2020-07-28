@@ -12,6 +12,10 @@ class RelationalExecutor(object):
   def generate(self, df):
     return self.queryGenerator.generate(df)
 
+  def generateQuery(self, df):
+    (pre,qry) = self.generate(df)
+    return f"{pre} {qry}"
+
   def _execute(self, sql):
     cursor = self.connection.cursor()
     try:
@@ -113,8 +117,8 @@ class RelationalExecutor(object):
     set the delimiter. Non-pretty mode ignores the maxColWidth parameter.
     """
 
-    sql = self.queryGenerator.generate(df)
-    return self._execute(sql)
+    (pre,sql) = self.queryGenerator.generate(df)
+    return self._execute(f"{pre};{sql}")
 
   def _execAgg(self, df, col, func):
     """
