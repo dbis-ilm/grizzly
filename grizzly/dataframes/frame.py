@@ -285,6 +285,13 @@ class Table(DataFrame):
     alias = GrizzlyGenerator._incrAndGetTupleVar()
     super().__init__([], None, alias)
 
+class ExternalTable(DataFrame):
+  def __init__(self, file, colDefs):
+    self.filenames = file
+    self.colDefs = colDefs
+    alias = GrizzlyGenerator._incrAndGetTupleVar()
+    super().__init__([], None, alias)
+
 class Projection(DataFrame):
 
   def __init__(self, attrs, parent, doDistinct = False):
