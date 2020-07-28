@@ -276,7 +276,8 @@ class DataFrame(object):
   
   def generateQuery(self):
     (pre,qry) = self.generate()
-    return f"{pre} {qry}"
+    prequeries = ";".join(pre)
+    return f"{prequeries} {qry}"
 
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
     print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
@@ -297,10 +298,14 @@ class Table(DataFrame):
     super().__init__([], None, alias)
 
 class ExternalTable(DataFrame):
-  def __init__(self, file, colDefs):
+  def __init__(self, file, colDefs, hasHeader, delimiter, format):
     self.filenames = file
     self.colDefs = colDefs
+    self.hasHeader = hasHeader
+    self.delimiter = delimiter
+    self.format = format
     alias = GrizzlyGenerator._incrAndGetTupleVar()
+    self.table = f"temp_ext_table{alias}"
     super().__init__([], None, alias)
 
 class Projection(DataFrame):

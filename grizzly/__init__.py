@@ -11,5 +11,5 @@ def close():
 def read_table(tableName):
   return Table(tableName)
 
-def read_external_table(file, colDefs):
-  return ExternalTable(file, colDefs)
+def read_external_files(file, colDefs, hasHeader=True, delimiter='|', format=""):
+  return ExternalTable(file, colDefs, hasHeader, delimiter, format)

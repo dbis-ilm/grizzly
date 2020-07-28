@@ -1,7 +1,7 @@
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import UDF, Table, Projection, Filter, Join, Grouping, DataFrame
+from grizzly.dataframes.frame import UDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import FuncCall, ColRef, Expr
-
+from typing import List
 from grizzly.generator import GrizzlyGenerator
 
 import random
@@ -71,6 +71,10 @@ class Query:
 
       if isinstance(curr,Table):
         self.table = f"{curr.table} {curr.alias}"
+
+      elif isinstance(curr, ExternalTable):
+        self.table = f"{curr.table} {curr.alias}"
+        self.preQueryCode.extend(SQLGenerator._generateCreateExtTable(curr))
 
       elif isinstance(curr,Projection):
         if curr.attrs:
@@ -178,11 +182,36 @@ class SQLGenerator:
       AS LANGUAGE PYTHON
       SOURCE='
       {lines}
-      '
+      ';
     """
 
     return code
 
+  @staticmethod
+  def _generateCreateExtTable(tab: ExternalTable) -> List[str]:
+    queries = []
+    # In place string replacement
+    for i in range(len(tab.colDefs)):
+      tab.colDefs[i] = tab.colDefs[i].replace(":", " ").replace("str", "VARCHAR(1024)")
+    schemaString = ",".join(tab.colDefs)
+
+    queries.append(f"DROP TABLE IF EXISTS {tab.table};")
+
+    code = f"CREATE EXTERNAL TABLE {tab.table}({schemaString}) USING SPARK WITH REFERENCE='{tab.filenames}'"
+
+    if tab.format != "":
+        code += f", FORMAT='{tab.format}'"
+
+    options = ["'delimiter'='|'"]
+    if not tab.hasHeader:
+      options.append("'header'='false'")
+      options.append(f"'schema'='{schemaString}'")
+
+    optionString = ",".join(options)
+    code += f", OPTIONS=({optionString})"
+    code += ";"
+    queries.append(code)
+    return queries
 
   @staticmethod
   def _getFuncCode(df, col, func):
@@ -208,7 +237,8 @@ class SQLGenerator:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      aggSQL = f"{pre};SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      prequeries = ";".join(pre)
+      aggSQL = f"{prequeries};SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
       # aggSQL = innerSQL
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
@@ -216,9 +246,8 @@ class SQLGenerator:
 
     return aggSQL
 
-  def generate(self, df) -> (str,str):
+  def generate(self, df) -> (List[str],str):
     qry = Query()
     qryString = qry._buildFrom(df)
-    preQry = "\n".join(qry.preQueryCode)
 
-    return (preQry, qryString)
+    return (qry.preQueryCode, qryString)

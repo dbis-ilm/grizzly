@@ -14,7 +14,8 @@ class RelationalExecutor(object):
 
   def generateQuery(self, df):
     (pre,qry) = self.generate(df)
-    return f"{pre} {qry}"
+    prequeries = ";".join(pre)
+    return f"{prequeries} {qry}"
 
   def _execute(self, sql):
     cursor = self.connection.cursor()
@@ -59,7 +60,6 @@ class RelationalExecutor(object):
     rs = self.execute(df)
 
     cols = [dec[0] for dec in rs.description]
-    
 
     if not pretty:
       strings = [delim.join(cols)]
@@ -112,13 +112,17 @@ class RelationalExecutor(object):
   def execute(self, df):
     """
     Execute the operations and print results to stdout
+    If pre-queries are necessary, e.g. for UDF or External table creation,
+    they are executed first.
 
     Non-pretty mode outputs in CSV style -- the delim parameter can be used to 
     set the delimiter. Non-pretty mode ignores the maxColWidth parameter.
     """
 
     (pre,sql) = self.queryGenerator.generate(df)
-    return self._execute(f"{pre};{sql}")
+    for pq in pre:
+      self._execute(pq).close()
+    return self._execute(sql)
 
   def _execAgg(self, df, col, func):
     """
