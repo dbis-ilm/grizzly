@@ -195,14 +195,14 @@ class SQLGenerator:
       tab.colDefs[i] = tab.colDefs[i].replace(":", " ").replace("str", "VARCHAR(1024)")
     schemaString = ",".join(tab.colDefs)
 
-    queries.append(f"DROP TABLE IF EXISTS {tab.table};")
+    queries.append(f"DROP TABLE IF EXISTS {tab.table}")
 
     code = f"CREATE EXTERNAL TABLE {tab.table}({schemaString}) USING SPARK WITH REFERENCE='{tab.filenames}'"
 
     if tab.format != "":
         code += f", FORMAT='{tab.format}'"
 
-    options = ["'delimiter'='|'"]
+    options = [f"'delimiter'='{tab.delimiter}'"]
     if not tab.hasHeader:
       options.append("'header'='false'")
       options.append(f"'schema'='{schemaString}'")
