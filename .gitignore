@@ -134,3 +134,5 @@ dmypy.json
 
 # End of https://www.gitignore.io/api/code,python
 
+cidr.py
+runcidr.sh
