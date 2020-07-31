@@ -75,6 +75,13 @@ class DataFrame(object):
 
     return resultLines
 
+  @staticmethod
+  def _mapTypes(pythonType: str) -> str:
+    if pythonType == "str":
+      return "varchar(255)"
+    else: 
+      return pythonType
+
   def map(self, func):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
@@ -91,12 +98,15 @@ class DataFrame(object):
       params = []
       for fp in fparams:
         fptype = sig.parameters[fp].annotation.__name__
+        fptype = DataFrame._mapTypes(fptype)
+
         p = Param(fp,fptype)
         params.append(p)
 
       (lines,_) = inspect.getsourcelines(func)
       lines = DataFrame._unindent(lines[1:])
       returns = sig.return_annotation.__name__
+      returns = DataFrame._mapTypes(returns)
 
       # print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
 
