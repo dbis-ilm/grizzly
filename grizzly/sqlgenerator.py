@@ -175,13 +175,13 @@ class SQLGenerator:
   @staticmethod
   def _generateCreateFunc(udf: UDF) -> str:
     paramsStr = ",".join([f"{p.name} {p.type}" for p in udf.params])
-    lines = "\n".join(udf.lines)
+    lines = "".join(udf.lines)
 
     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr}) 
       return ({udf.returnType})
       AS LANGUAGE PYTHON
       SOURCE='
-      {lines}
+{lines}
       ';
     """
 

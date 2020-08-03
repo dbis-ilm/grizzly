@@ -64,6 +64,17 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
+  @staticmethod
+  def _unindent(lines: list) -> list:
+    firstLine = lines[0]
+
+    numLeadingSpaces = len(firstLine) - len(firstLine.lstrip())
+    resultLines = []
+    for line in lines:
+      resultLines.append(line[numLeadingSpaces:])
+
+    return resultLines
+
   def map(self, func):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
@@ -84,12 +95,12 @@ class DataFrame(object):
         params.append(p)
 
       (lines,_) = inspect.getsourcelines(func)
-
+      lines = DataFrame._unindent(lines[1:])
       returns = sig.return_annotation.__name__
 
-      print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
+      # print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
 
-      udf = UDF(funcName, params, lines[1:], returns)
+      udf = UDF(funcName, params, lines, returns)
       call = FuncCall(funcName, self.attrs, self, udf)
 
       return self.project([call])
@@ -116,10 +127,7 @@ class DataFrame(object):
     else:
       newCol = ColRef(value, self, key)
     
-    newCols = self.columns + [newCol]
-    
-    # # TODO: this might set column for non-projection DF, which is currently ignored in SQL generator
-    self.computedCols += newCols
+    self.computedCols += [newCol]
 
 
 
