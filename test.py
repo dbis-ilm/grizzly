@@ -403,5 +403,38 @@ class DataFrameTest(CodeMatcher):
     # df["newid"] = [df['globaleventid'] == 467268277]
     df["newid"] = df["globaleventid"].map(lambda x: x+"grizzlylambda")
 
+  def test_externaltable(self):
+    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
+    actual = df.generateQuery()
+    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float'); " \
+               "SELECT * FROM temp_ext_table$t0 $t0"
+    self.matchSnipped(actual, expected)
+
+    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True)
+    actual = df.generateQuery()
+    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|'); " \
+               "SELECT * FROM temp_ext_table$t0 $t0"
+    self.matchSnipped(actual, expected)
+
+    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',')
+    actual = df.generateQuery()
+    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'=','); " \
+               "SELECT * FROM temp_ext_table$t0 $t0"
+    self.matchSnipped(actual, expected)
+
+    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', "csv")
+    actual = df.generateQuery()
+    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+               "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=','); " \
+               "SELECT * FROM temp_ext_table$t0 $t0"
+    self.matchSnipped(actual, expected)
+
 if __name__ == "__main__":
     unittest.main()
