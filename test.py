@@ -401,7 +401,7 @@ class DataFrameTest(CodeMatcher):
   def test_udflambda(self):
     df = grizzly.read_table("events") 
     # df["newid"] = [df['globaleventid'] == 467268277]
-    df["globaleventid"].map(lambda x: x+"grizzlylambda")
+    df["newid"] = df["globaleventid"].map(lambda x: x+"grizzlylambda")
 
 if __name__ == "__main__":
     unittest.main()
