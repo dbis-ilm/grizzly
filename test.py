@@ -403,6 +403,17 @@ class DataFrameTest(CodeMatcher):
     # df["newid"] = [df['globaleventid'] == 467268277]
     df["newid"] = df["globaleventid"].map(lambda x: x+"grizzlylambda")
 
+  def test_mapDataFrame(self):
+    df1 = grizzly.read_table("events") 
+    df2 = grizzly.read_table("events") 
+
+    j = df1.map(df2)
+
+    actual = j.generateQuery()
+    expected = "SELECT * FROM events $t0 NATURAL JOIN events $t1"
+    self.matchSnipped(actual, expected)
+
+
   def test_externaltable(self):
     df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
     actual = df.generateQuery()
