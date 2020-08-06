@@ -4,6 +4,8 @@ from grizzly.aggregates import AggregateType
 from grizzly.expression import UDF, Param
 
 import inspect
+import torch
+
 ###########################################################################
 # Base DataFrame with common operations
 
@@ -120,6 +122,20 @@ class DataFrame(object):
     else:
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
+
+  def predict(self, path: str, n_predictions: int = 1):
+
+    if not isinstance(self, Projection):
+      ValueError("classification can only be applied to a projection")
+
+    modelPathHash = hash(path)
+    funcName = f"grizzly_predict_{modelPathHash}"
+    attrsString = "_".join(self.attrs)
+
+    udf = UDF(funcName,[Param("inValue", "str"), Param("n_predictions", "int")],None, "str")
+    call = FuncCall(funcName,self.attrs, self,udf, f"prediction_{attrsString}")
+
+    return self.project([call])
 
   ###################################
   # shortcuts

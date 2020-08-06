@@ -1,5 +1,23 @@
 postgresql:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$';
 
+  applymodelfunction: |
+      $$helpers$$
+      $$encoder$$
+      if not hasattr(random, "model_$$modelpathhash$$"):
+        random.model_$$modelpathhash$$ = torch.load($$modelpath$$)
+        random.model_$$modelpathhash$$.eval()
+
+      model = random.model_$$modelpathhash$$
+      model.initHidden()
+
+      tensor = Variable(toTensor(inputdata))
+      for i in range(tensor.size()[0]):
+        output, hidden = model(tensor[i], hidden)
+
+      topv, topi = output.data.topk(n_predictions, 1, True)
+
+      return str(topi[0][i])+" "+str(topv[0][i])';
+
 vectorh:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$';

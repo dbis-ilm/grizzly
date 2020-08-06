@@ -36,6 +36,12 @@ class UDF(object):
     paramString = ','.join(str(p) for p in self.params)
     return f"{self.name}({paramString}): {self.returnType}"
 
+class ModelUDF(UDF):
+  def __init__(self, name: str, params: list, lines: list, returnType: str, encoder: list, helpers: list):
+    super.__init__(name, params, lines, returnType)
+    self.encoder = encoder
+    self.helpers = helpers
+
 class FuncCall(Expr):
   def __init__(self, funcName: str, inputCols: list, df, udf: UDF, alias: str = ""):
     self.funcName = funcName

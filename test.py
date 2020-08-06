@@ -404,7 +404,6 @@ class DataFrameTest(CodeMatcher):
     df["newid"] = df["globaleventid"].map(myfunc)
 
     actual = df.generateQuery()
-    # print(actual)
 
     expected = """create or replace function myfunc(a int) returns varchar(255) language plpython3u as 'return a+"_grizzly"';select *, myfunc($t0.globaleventid) as newid from events $t0 where $t0.globaleventid = 467268277"""
 

@@ -210,23 +210,11 @@ class SQLGenerator:
   
   def generateCreateFunc(self, udf: UDF) -> str:
     paramsStr = ",".join([f"{p.name} {p.type}" for p in udf.params])
-    lines = "".join(udf.lines)
 
-#     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr}) 
-#       return ({udf.returnType})
-#       AS LANGUAGE PYTHON
-#       SOURCE='
-# {lines}
-#       ';
-#     """
-
-#     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr})
-#     returns {udf.returnType}
-#     LANGUAGE plpython3u
-#     AS '
-# {lines}
-#     ';
-#     """ 
+    if udf.lines:
+      lines = "".join(udf.lines)
+    else:
+      lines = self.templates["applymodelfunction"]
 
     template = self.templates["createfunction"]
 
