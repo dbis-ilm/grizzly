@@ -9,7 +9,9 @@ import string
 
 class Query:
 
-  def __init__(self):
+  def __init__(self, generator):
+    self.generator = generator
+
     self.filters = []
     self.projections = None
     self.doDistinct = False
@@ -37,7 +39,7 @@ class Query:
     # right hand side is a dataframe (i.e. subquery)
     elif isinstance(expr, DataFrame): 
       # if right hand side is a DataFrame, we need to create code first 
-      subQry = Query()
+      subQry = Query(self.generator)
       exprSQL = subQry._buildFrom(expr)
 
     elif isinstance(expr, ColRef):
@@ -99,18 +101,20 @@ class Query:
           rightSQL = curr.right.table
           rtVar = curr.right.alias
         else:
-          subQry = Query()
+          subQry = Query(self.generator)
           rightSQL = f"({subQry._buildFrom(curr.right)})"
           rtVar = GrizzlyGenerator._incrAndGetTupleVar()
           # curr.right.alias = rtVar
           curr.right.setAlias(rtVar)
 
         if isinstance(curr.on, Expr):
-          onSQL = self._exprToSQL(curr.on)
+          onSQL = "ON " + self._exprToSQL(curr.on)
+        elif isinstance(curr.on, list):
+          onSQL = f"ON {curr.alias}.{curr.on[0]} {curr.comp} {rtVar}.{curr.on[1]}"
         else:
-          onSQL = f"{curr.alias}.{curr.on[0]} {curr.comp} {rtVar}.{curr.on[1]}"
-        
-        joinSQL = f"{curr.how} JOIN {rightSQL} {rtVar} ON {onSQL}"
+          onSQL = ""
+
+        joinSQL = f"{curr.how} JOIN {rightSQL} {rtVar} {onSQL}"
         self.joins.append(joinSQL)
 
       elif isinstance(curr, Grouping):
@@ -143,7 +147,7 @@ class Query:
       # computed attribute
       projs += ", "+computedStr
 
-      self.preQueryCode += [ SQLGenerator._generateCreateFunc(func.udf) for func in computedCols if isinstance(func, FuncCall) ]
+      self.preQueryCode += [ self.generator.generateCreateFunc(func.udf) for func in computedCols if isinstance(func, FuncCall) ]
 
     grouping = ""
     if self.groupcols:
@@ -170,20 +174,63 @@ class Query:
     qrySoFar = f"SELECT {projs} FROM {self.table}{joins}{where}{grouping}"
     return qrySoFar
 
-class SQLGenerator:
+class Config:
 
   @staticmethod
-  def _generateCreateFunc(udf: UDF) -> str:
+  def loadProfile(profile: str):
+
+    if not profile:
+      return Config(profile, dict())
+
+    path = f"./grizzly.yml"
+    import yaml
+    configs = None
+    with open(path,"r") as configFile:
+      configs = yaml.load(configFile, Loader=yaml.FullLoader)
+
+    return Config(profile, configs[profile])
+
+
+  def __init__(self, profile, config):
+    self.profile = profile
+    self.config = config
+
+  def __getitem__(self, key: str):
+    if key in self.config:
+      return self.config[key]
+    else:
+      raise ValueError(f"Unsupported configuration key {key} in profile {self.profile}")
+
+
+class SQLGenerator:
+
+  def __init__(self, profile: str = None):
+    self.profile = profile
+    self.templates = Config.loadProfile(profile)
+  
+  def generateCreateFunc(self, udf: UDF) -> str:
     paramsStr = ",".join([f"{p.name} {p.type}" for p in udf.params])
     lines = "".join(udf.lines)
 
-    code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr}) 
-      return ({udf.returnType})
-      AS LANGUAGE PYTHON
-      SOURCE='
-{lines}
-      ';
-    """
+#     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr}) 
+#       return ({udf.returnType})
+#       AS LANGUAGE PYTHON
+#       SOURCE='
+# {lines}
+#       ';
+#     """
+
+#     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr})
+#     returns {udf.returnType}
+#     LANGUAGE plpython3u
+#     AS '
+# {lines}
+#     ';
+#     """ 
+
+    template = self.templates["createfunction"]
+
+    code = template.replace("$$name$$", udf.name).replace("$$inparams$$",paramsStr).replace("$$returntype$$",udf.returnType).replace("$$code$$",lines)
 
     return code
 
@@ -247,7 +294,7 @@ class SQLGenerator:
     return aggSQL
 
   def generate(self, df) -> (List[str],str):
-    qry = Query()
+    qry = Query(self)
     qryString = qry._buildFrom(df)
 
     return (qry.preQueryCode, qryString)

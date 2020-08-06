@@ -2,6 +2,7 @@ import grizzly
 # Requires pyodbc and eventually unixodbc-dev for pyodbc build process
 import pyodbc as pdb
 from grizzly.relationaldbexecutor import RelationalExecutor
+from grizzly.sqlgenerator import SQLGenerator
 
 """
     Connect to remote Vector instance
@@ -12,7 +13,7 @@ from grizzly.relationaldbexecutor import RelationalExecutor
 """
 
 con = pdb.connect("driver=Ingres;servertype=ingres;server=dbblade;database=tpch")
-grizzly.use(RelationalExecutor(con))
+grizzly.use(RelationalExecutor(con, SQLGenerator("vectorh")))
 
 def myfunc(a: int) -> int:
     if a > 0:
