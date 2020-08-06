@@ -1,10 +1,9 @@
 from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, FuncCall, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
-from grizzly.expression import UDF, Param
+from grizzly.expression import ModelUDF,UDF, Param
 
 import inspect
-import torch
 
 ###########################################################################
 # Base DataFrame with common operations
@@ -66,23 +65,7 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
-  @staticmethod
-  def _unindent(lines: list) -> list:
-    firstLine = lines[0]
-
-    numLeadingSpaces = len(firstLine) - len(firstLine.lstrip())
-    resultLines = []
-    for line in lines:
-      resultLines.append(line[numLeadingSpaces:])
-
-    return resultLines
-
-  @staticmethod
-  def _mapTypes(pythonType: str) -> str:
-    if pythonType == "str":
-      return "varchar(255)"
-    else: 
-      return pythonType
+  
 
   def map(self, func):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
@@ -100,15 +83,15 @@ class DataFrame(object):
       params = []
       for fp in fparams:
         fptype = sig.parameters[fp].annotation.__name__
-        fptype = DataFrame._mapTypes(fptype)
+        # fptype = DataFrame._mapTypes(fptype)
 
         p = Param(fp,fptype)
         params.append(p)
 
       (lines,_) = inspect.getsourcelines(func)
-      lines = DataFrame._unindent(lines[1:])
+      # lines = lines[1:]
       returns = sig.return_annotation.__name__
-      returns = DataFrame._mapTypes(returns)
+      # returns = DataFrame._mapTypes(returns)
 
       # print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
 
@@ -123,17 +106,17 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
-  def predict(self, path: str, n_predictions: int = 1):
+  def predict(self, path: str, toTensorFunc, n_predictions: int = 1, *helperFuncs):
 
     if not isinstance(self, Projection):
       ValueError("classification can only be applied to a projection")
 
     modelPathHash = hash(path)
     funcName = f"grizzly_predict_{modelPathHash}"
-    attrsString = "_".join(self.attrs)
+    attrsString = "_".join([r.column for r in self.attrs])
 
-    udf = UDF(funcName,[Param("inValue", "str"), Param("n_predictions", "int")],None, "str")
-    call = FuncCall(funcName,self.attrs, self,udf, f"prediction_{attrsString}")
+    udf = ModelUDF(funcName,[Param("inValue", "str"), Param("n_predictions", "int")], "str", path, modelPathHash, toTensorFunc, list(helperFuncs))
+    call = FuncCall(funcName, self.attrs + [n_predictions] , self,udf, f"predicted_{attrsString}")
 
     return self.project([call])
 

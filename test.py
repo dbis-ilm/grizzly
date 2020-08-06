@@ -427,6 +427,30 @@ class DataFrameTest(CodeMatcher):
     expected = "SELECT * FROM events $t0 NATURAL JOIN events $t1"
     self.matchSnipped(actual, expected)
 
+  def test_predictPytorch(self):
+
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
+
+    def isEmptyString(s):
+      return len(s) <= 0
+
+    def stringToTensor(s):
+      if not isEmptyString(s):
+        return s.split()
+      else:
+        return []
+
+    df = grizzly.read_table("events") 
+    df["blubb"] = df[df.n_nation].predict("/tmp/mymodel.pt",stringToTensor, 1, isEmptyString)
+
+    actual = df.generateQuery()
+    print(actual)
+
+    GrizzlyGenerator._backend = oldGen
 
   def test_externaltable(self):
     df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)

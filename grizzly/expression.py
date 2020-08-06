@@ -37,8 +37,10 @@ class UDF(object):
     return f"{self.name}({paramString}): {self.returnType}"
 
 class ModelUDF(UDF):
-  def __init__(self, name: str, params: list, lines: list, returnType: str, encoder: list, helpers: list):
-    super.__init__(name, params, lines, returnType)
+  def __init__(self, name: str, params: list, returnType: str, path: str, pathHash: str, encoder, helpers: list):
+    UDF.__init__(self,name, params, None, returnType)
+    self.path = path
+    self.pathHash = pathHash
     self.encoder = encoder
     self.helpers = helpers
 
