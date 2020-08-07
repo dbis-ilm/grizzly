@@ -2,6 +2,7 @@ from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, Fu
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
 from grizzly.expression import UDF, Param
+import grizzly.modeljoin as mj
 
 import inspect
 ###########################################################################
@@ -82,7 +83,7 @@ class DataFrame(object):
     else: 
       return pythonType
 
-  def map(self, func):
+  def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
@@ -102,9 +103,9 @@ class DataFrame(object):
 
         p = Param(fp,fptype)
         params.append(p)
-
-      (lines,_) = inspect.getsourcelines(func)
-      lines = DataFrame._unindent(lines[1:])
+      if lines == []:
+        (lines,_) = inspect.getsourcelines(func)
+        lines = DataFrame._unindent(lines[1:])
       returns = sig.return_annotation.__name__
       returns = DataFrame._mapTypes(returns)
 
@@ -122,6 +123,15 @@ class DataFrame(object):
     else:
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
+
+  def map(self, func):
+    return self._map(func)
+
+  def apply_tensorflow_model(self, tf_checkpoint_dir: str, network_input_names, constants=[], vocab_file: str = ""):
+    code = mj.build_tensorflow_apply_from_checkpoint(tf_checkpoint_dir, network_input_names, constants, vocab_file)
+    exec(code)
+    split = [e+"\n" for e in code.split("\n") if e]
+    return self._map(locals()['apply'], split)
 
   ###################################
   # shortcuts

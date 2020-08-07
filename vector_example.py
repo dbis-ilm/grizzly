@@ -43,30 +43,25 @@ def runtimetest(i: int) -> str:
     else:
         return "exists"
 
-from grizzly.aggregates import AggregateType
+"""
 df1 = grizzly.read_table("orders")
 df2 = grizzly.read_table("lineitem")
 j = df1.join(df2, on = (df1.o_orderkey == df2.l_orderkey))
-#j["new"] = j[[df1.o_orderkey, df2.l_linenumber]].map(addkeys)
-print(j.count())
+j["new"] = j[[df1.o_orderkey, df2.l_linenumber]].map(addkeys)
+print(j.min("new"))
+
+
+
+df1 = grizzly.read_external_files("file:///home/actian/tpch-dbgen/nation.csv",
+                                 ["n_nationkey:int", "xn_name:str" , "n_regionkey:int", "n_comment:str"], False)
+df2 = grizzly.read_table("region").apply_tensorflow_model(["The movie is great", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
+
+j = df1.join(df2, on = (df1.n_regionkey == df2.r_regionkey))
 """
 vocab_file = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/vocab"
 checkpoint_dir = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/checkpoints"
-
-df1 = grizzly.read_external_files("file:///home/actian/tpch-dbgen/nation.csv",
-                                 ["n_nationkey:int", "n_name:str" , "n_regionkey:int", "n_comment:str"], False)
+df1 = grizzly.read_table("nation")
+df1["new"] = df1[df1.n_name].apply_tensorflow_model(checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
 df1.show()
-df2 = grizzly.read_table("region")#.apply_tensorflow_model(["The movie is great", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
 
-
-j = df1.join(df2, on = (df1.n_regionkey == df2.r_regionkey))
-
-# j["newkey"] = j[df2.r_regionkey].map(myfunc)
-# j["concted"] = j[[df2.r_name, df2.r_comment]].map(concatNames)
-j["accum"] = j[df2.r_regionkey].map(runtimetest)
-
-
-# print(j.generateQuery())
-j.show(pretty=True, limit=25)
 con.close()
-"""

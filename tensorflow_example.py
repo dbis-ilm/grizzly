@@ -1,5 +1,4 @@
 import tensorflow as tf
-import os
 import numpy as np
 from tensorflow.contrib import learn
 
@@ -47,7 +46,7 @@ def apply_model(values, tf_checkpoint_dir:str, network_input_names, constants = 
                 x = [constants[i]]
             feed_dict[type_dict[i]] = x
 
-        return sess.run(type_dict["output"], feed_dict)
+        return sess.run(type_dict["output"], feed_dict)[0]
 
 vocab_file = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/vocab"
 checkpoint_dir = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/checkpoints"
