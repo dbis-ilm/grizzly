@@ -11,7 +11,7 @@ from grizzly.relationaldbexecutor import RelationalExecutor
     For remote access, Vector installation must be configured as dmbs_authentication=OPTIONAL.
 """
 
-con = pdb.connect("driver=Ingres;servertype=ingres;server=cloud01;database=tpch")
+con = pdb.connect("driver=Ingres;servertype=ingres;server=cloud01_docker;database=tpch")
 grizzly.use(RelationalExecutor(con))
 
 def myfunc(a: int) -> int:
@@ -19,6 +19,9 @@ def myfunc(a: int) -> int:
         return a+a
     else:
         return -1
+
+def addkeys(a: int, b:int) -> int:
+    return a+b
 
 def concatNames(name: str, comment: str) -> str:
     
@@ -40,10 +43,21 @@ def runtimetest(i: int) -> str:
     else:
         return "exists"
 
-df1 = grizzly.read_external_files("/home/actian/tpch-dbgen/nation.csv",
+from grizzly.aggregates import AggregateType
+df1 = grizzly.read_table("orders")
+df2 = grizzly.read_table("lineitem")
+j = df1.join(df2, on = (df1.o_orderkey == df2.l_orderkey))
+#j["new"] = j[[df1.o_orderkey, df2.l_linenumber]].map(addkeys)
+print(j.count())
+"""
+vocab_file = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/vocab"
+checkpoint_dir = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/checkpoints"
+
+df1 = grizzly.read_external_files("file:///home/actian/tpch-dbgen/nation.csv",
                                  ["n_nationkey:int", "n_name:str" , "n_regionkey:int", "n_comment:str"], False)
-df2 = grizzly.read_table("region")
-df2.show()
+df1.show()
+df2 = grizzly.read_table("region")#.apply_tensorflow_model(["The movie is great", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
+
 
 j = df1.join(df2, on = (df1.n_regionkey == df2.r_regionkey))
 
@@ -55,3 +69,4 @@ j["accum"] = j[df2.r_regionkey].map(runtimetest)
 # print(j.generateQuery())
 j.show(pretty=True, limit=25)
 con.close()
+"""
