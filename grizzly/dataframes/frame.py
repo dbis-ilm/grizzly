@@ -2,7 +2,6 @@ from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, Fu
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
 from grizzly.expression import UDF, Param
-import grizzly.modeljoin as mj
 
 import inspect
 ###########################################################################
@@ -126,7 +125,11 @@ class DataFrame(object):
     return self._map(func)
 
   def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
-    code = mj.build_tensorflow_apply_from_checkpoint(tf_checkpoint_file, network_input_names, constants, vocab_file)
+    code = GrizzlyGenerator._backend.queryGenerator.templates["tensorflow_code"]
+    code = code.replace("$$tf_checkpoint_file$$", tf_checkpoint_file)\
+      .replace("$$vocab_file$$", vocab_file)\
+      .replace("$$network_input_names$$", f"""[{', '.join('"%s"' % n for n in network_input_names)}]""")\
+      .replace("$$constants$$", f"[{','.join(str(item) for item in constants)}]")
     exec(code)
     #Split lines but keep line breaks included
     split = [e+"\n" for e in code.split("\n") if e]
