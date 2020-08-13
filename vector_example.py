@@ -2,6 +2,7 @@ import grizzly
 # Requires pyodbc and eventually unixodbc-dev for pyodbc build process
 import pyodbc as pdb
 from grizzly.relationaldbexecutor import RelationalExecutor
+from grizzly.sqlgenerator import SQLGenerator
 
 """
     Connect to remote Vector instance

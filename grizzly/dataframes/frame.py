@@ -87,11 +87,11 @@ class DataFrame(object):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
-    if not isinstance(self, Projection):
-        ValueError("functions can only be applied to projections currently")
-
 
     if inspect.isfunction(func):
+      if not isinstance(self, Projection):
+        ValueError("functions can only be applied to projections currently")
+
       funcName = func.__name__
 
       sig = inspect.signature(func)
@@ -116,10 +116,8 @@ class DataFrame(object):
 
       return self.project([call])
 
-    elif isinstance(self, DataFrame):
-      # TODO: perform natural join
-      print("map with DataFrame not implemented yet")
-      exit(2)
+    elif isinstance(func, DataFrame):
+      return self.join(func,None, how = "natural")
     else:
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)

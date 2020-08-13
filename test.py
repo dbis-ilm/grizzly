@@ -11,8 +11,8 @@ from grizzly.relationaldbexecutor import RelationalExecutor
 class CodeMatcher(unittest.TestCase):
   
 
-  def matchSnipped(self, snipped, template):
-    res, mapping, expanded = self.doMatchSnipped(snipped.strip(), template.strip())
+  def matchSnipped(self, snipped, template, removeLinebreaks: bool = False):
+    res, mapping, expanded = self.doMatchSnipped(snipped.strip(), template.strip(),removeLinebreaks)
     if not res:
       mapstr = "with mapping:\n"
       for templ,tVar in mapping.items():
@@ -21,7 +21,7 @@ class CodeMatcher(unittest.TestCase):
 
       
 
-  def doMatchSnipped(self, snipped, template):
+  def doMatchSnipped(self, snipped, template, removeLinebreaks):
     replacements = {}
     pattern = re.compile("\$t[0-9]+")
 
@@ -46,6 +46,10 @@ class CodeMatcher(unittest.TestCase):
     s = template
     for k,v in replacements.items():
       s = s.replace(k,v)
+
+    if removeLinebreaks:
+      snipped = snipped.replace("\n","")
+      template = template.replace("\n","")
 
     return snipped.replace(" ","").lower() == s.replace(" ","").lower(), replacements, s
 
@@ -381,6 +385,11 @@ class DataFrameTest(CodeMatcher):
     self.assertEqual(cnt, 9899259)
 
   def test_udf(self):
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
 
     # function must have "return annotation" so that we know 
     # what the result would be
@@ -395,13 +404,30 @@ class DataFrameTest(CodeMatcher):
     df["newid"] = df["globaleventid"].map(myfunc)
 
     actual = df.generateQuery()
-    print(actual)
+    # print(actual)
+
+    expected = """create or replace function myfunc(a int) returns varchar(255) language plpython3u as 'return a+"_grizzly"';select *, myfunc($t0.globaleventid) as newid from events $t0 where $t0.globaleventid = 467268277"""
+
+    GrizzlyGenerator._backend = oldGen
+
+    self.matchSnipped(actual, expected, removeLinebreaks=True)
 
 
-  def test_udflambda(self):
-    df = grizzly.read_table("events") 
-    # df["newid"] = [df['globaleventid'] == 467268277]
-    df["newid"] = df["globaleventid"].map(lambda x: x+"grizzlylambda")
+  # def test_udflambda(self):
+  #   df = grizzly.read_table("events") 
+  #   # df["newid"] = [df['globaleventid'] == 467268277]
+  #   df["newid"] = df["globaleventid"].map(lambda x: x+"grizzlylambda")
+
+  def test_mapDataFrame(self):
+    df1 = grizzly.read_table("events") 
+    df2 = grizzly.read_table("events") 
+
+    j = df1.map(df2)
+
+    actual = j.generateQuery()
+    expected = "SELECT * FROM events $t0 NATURAL JOIN events $t1"
+    self.matchSnipped(actual, expected)
+
 
   def test_externaltable(self):
     df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
