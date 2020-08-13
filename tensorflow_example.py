@@ -17,7 +17,7 @@ def apply_model(values, tf_checkpoint_dir:str, network_input_names, constants = 
     global vocab_processor
 
     if graph is None:
-        checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
+        checkpoint_file = tf.train.latest_checkpoint(tf_checkpoint_dir)
         graph = tf.Graph()
         with graph.as_default():
             sess = tf.Session()
@@ -45,11 +45,10 @@ def apply_model(values, tf_checkpoint_dir:str, network_input_names, constants = 
             else:
                 x = [constants[i]]
             feed_dict[type_dict[i]] = x
-
         return sess.run(type_dict["output"], feed_dict)[0]
 
 vocab_file = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/vocab"
 checkpoint_dir = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/checkpoints"
 
-print(apply_model(["The movie is great", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file))
-print(apply_model(["The movie is bad", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file))
+print(apply_model(["the movie is awesome", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file))
+print(apply_model(["the movie is bad", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file))

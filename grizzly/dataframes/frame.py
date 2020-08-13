@@ -127,10 +127,12 @@ class DataFrame(object):
   def map(self, func):
     return self._map(func)
 
-  def apply_tensorflow_model(self, tf_checkpoint_dir: str, network_input_names, constants=[], vocab_file: str = ""):
-    code = mj.build_tensorflow_apply_from_checkpoint(tf_checkpoint_dir, network_input_names, constants, vocab_file)
+  def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
+    code = mj.build_tensorflow_apply_from_checkpoint(tf_checkpoint_file, network_input_names, constants, vocab_file)
     exec(code)
+    #Split lines but keep line breaks included
     split = [e+"\n" for e in code.split("\n") if e]
+    split.append("return apply(a)\n")
     return self._map(locals()['apply'], split)
 
   ###################################

@@ -1,57 +1,55 @@
-def build_tensorflow_apply_from_checkpoint(tf_checkpoint_dir: str, network_input_names, constants=[], vocab_file: str = ""):
+def build_tensorflow_apply_from_checkpoint(tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
     code = """
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib import learn
+import random
+import os
 def apply(a: str) -> int:
-   
-    graph = None
-    sess = None
-    feed_dict = {}
-    type_dict = {}
-    vocab_processor = None
 """+f"""
-    def apply_model(values):
-        global graph
-        global sess
-        global feed_dict
-        global type_dict
-        global vocab_processor
-    
-        tf_checkpoint_dir = "{tf_checkpoint_dir}"
-        network_input_names = [{', '.join(['"%s"' % n for n in network_input_names])}]
-        constants = {constants}
-        vocab_file = "{vocab_file}"
+    checkpoint_file = "{tf_checkpoint_file}"
+    network_input_names = [{', '.join(['"%s"' % n for n in network_input_names])}]
+    constants = {constants}
+    vocab_file = "{vocab_file}"
 """+"""
-        if graph is None:
-            checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
-            graph = tf.Graph()
-            with graph.as_default():
-                sess = tf.Session()
-                saver = tf.train.import_meta_graph(checkpoint_file + ".meta")
-                saver.restore(sess, checkpoint_file)
-    
-                for i in range(len(network_input_names)):
-                    type_dict[i] = graph.get_operation_by_name(network_input_names[i]).outputs[0]
-                type_dict["output"] = graph.get_operation_by_name("output/predictions").outputs[0]
-    
-                if vocab_file != "":
-                    vocab_processor = learn.preprocessing.VocabularyProcessor.restore(vocab_file)
-    
-        with sess.as_default() and graph.as_default():
-            for i in range(len(values)):
-                if constants == [] or constants[i] is None:
-                    raw = [values[i]]
-                    if vocab_processor is not None:
-                        x = np.array(list(vocab_processor.transform(raw)))
-                    else:
-                        x = raw
-                else:
-                    x = [constants[i]]
-                feed_dict[type_dict[i]] = x
-    
-            return sess.run(type_dict["output"], feed_dict)[0]
-    return apply([a, None])
-        """
+    def vocab_needs_reload():
+        ts = os.path.getmtime(vocab_file)
+        return (not hasattr(random, "vocab_timestamp") or (ts != random.vocab_timestamp))
+
+    def model_needs_reload():
+        ts = os.path.getmtime(checkpoint_file + ".meta")
+        return (not hasattr(random, "model_timestamp") or (ts != random.model_timestamp))
+
+    def vocab_load():
+        ts = os.path.getmtime(vocab_file)
+        random.vocab_timestamp = ts
+        random.vocab_processor = learn.preprocessing.VocabularyProcessor.restore(vocab_file)
+
+    def model_load():
+        ts = os.path.getmtime(checkpoint_file + ".meta")
+        random.graph = tf.Graph()
+        random.model_timestamo = ts
+        with random.graph.as_default():
+            random.sess=tf.Session()
+            saver = tf.train.import_meta_graph(checkpoint_file + ".meta")
+            saver.restore(random.sess, checkpoint_file)
+            random.type_dict = {}
+            for i in range(len(network_input_names)):
+                random.type_dict[i] = random.graph.get_operation_by_name(network_input_names[i]).outputs[0]
+            random.type_dict["output"] = random.graph.get_operation_by_name("output/predictions").outputs[0]
+
+    def apply_model(values):
+        #if (vocab_needs_reload()): vocab_load()
+        #if (model_needs_reload()): model_load()
+        vocab_load()
+        model_load()
+        with random.graph.as_default() and random.sess.as_default():
+            x = np.array(list(random.vocab_processor.transform([values[0]])))
+            feed_dict = {}
+            feed_dict[random.type_dict[0]] = x
+            feed_dict[random.type_dict[1]] = [constants[1]]
+            return random.sess.run(random.type_dict["output"], feed_dict)[0].item()
+    return apply_model([a.lower(), None])
+"""
     #TODO: list must be compatible with constants
     return code

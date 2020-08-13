@@ -57,11 +57,16 @@ df1 = grizzly.read_external_files("file:///home/actian/tpch-dbgen/nation.csv",
 df2 = grizzly.read_table("region").apply_tensorflow_model(["The movie is great", None], checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
 
 j = df1.join(df2, on = (df1.n_regionkey == df2.r_regionkey))
-"""
+
+
 vocab_file = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/vocab"
 checkpoint_dir = "/home/sklaebe/workspace/cnn-text-classification-tf/runs/1596453054/checkpoints"
-df1 = grizzly.read_table("nation")
-df1["new"] = df1[df1.n_name].apply_tensorflow_model(checkpoint_dir, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
+
+"""
+vocab_file = "/home/actian/model/vocab"
+checkpoint_file = "/home/actian/model/checkpoints/model-1000"
+df1 = grizzly.read_table("movies")
+df1["new"] = df1[df1.review].apply_tensorflow_model(checkpoint_file, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
 df1.show()
 
 con.close()
