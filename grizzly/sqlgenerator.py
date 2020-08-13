@@ -232,7 +232,7 @@ class SQLGenerator:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
-
+    pre = []
     if df.parents:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
