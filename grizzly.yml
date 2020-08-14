@@ -1,5 +1,5 @@
 postgresql:
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$';
+  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
 
   applymodelfunction: |
       import torch
