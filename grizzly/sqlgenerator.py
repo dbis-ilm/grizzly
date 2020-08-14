@@ -203,6 +203,10 @@ class Config:
       raise ValueError(f"Unsupported configuration key {key} in profile {self.profile}")
 
 
+from typing import NewType
+SqlBigInt = NewType("bigint", int)
+
+
 class SQLGenerator:
 
   def __init__(self, profile: str = None):
@@ -224,6 +228,8 @@ class SQLGenerator:
   def _mapTypes(pythonType: str) -> str:
     if pythonType == "str":
       return "varchar(255)"
+    # elif pythonType == "long":
+    #   return "bigint"
     else: 
       return pythonType
 
