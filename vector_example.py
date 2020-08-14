@@ -12,8 +12,8 @@ from grizzly.sqlgenerator import SQLGenerator
     For remote access, Vector installation must be configured as dmbs_authentication=OPTIONAL.
 """
 
-con = pdb.connect("driver=Ingres;servertype=ingres;server=dbblade;database=tpch")
-grizzly.use(RelationalExecutor(con, SQLGenerator("vectorh")))
+con = pdb.connect("driver=Ingres;servertype=ingres;server=cloud01_docker;database=tpch")
+grizzly.use(RelationalExecutor(con, SQLGenerator("vector")))
 
 def myfunc(a: int) -> int:
     if a > 0:

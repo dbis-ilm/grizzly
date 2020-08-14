@@ -76,7 +76,7 @@ class Query:
 
       elif isinstance(curr, ExternalTable):
         self.table = f"{curr.table} {curr.alias}"
-        self.preQueryCode.extend(SQLGenerator._generateCreateExtTable(curr))
+        self.preQueryCode.extend(self.generator._generateCreateExtTable(curr))
 
       elif isinstance(curr,Projection):
         if curr.attrs:
@@ -234,29 +234,32 @@ class SQLGenerator:
 
     return code
 
-  @staticmethod
-  def _generateCreateExtTable(tab: ExternalTable) -> List[str]:
+  def _generateCreateExtTable(self, tab: ExternalTable) -> List[str]:
     queries = []
+
     # In place string replacement
     for i in range(len(tab.colDefs)):
       tab.colDefs[i] = tab.colDefs[i].replace(":", " ").replace("str", "VARCHAR(1024)")
     schemaString = ",".join(tab.colDefs)
 
-    queries.append(f"DROP TABLE IF EXISTS {tab.table}")
-
-    code = f"CREATE EXTERNAL TABLE {tab.table}({schemaString}) USING SPARK WITH REFERENCE='{tab.filenames}'"
-
+    formatString = ""
     if tab.format != "":
-        code += f", FORMAT='{tab.format}'"
+        formatString += f", FORMAT='{tab.format}'"
 
     options = [f"'delimiter'='{tab.delimiter}'"]
     if not tab.hasHeader:
       options.append("'header'='false'")
       options.append(f"'schema'='{schemaString}'")
+    optionString = f""", OPTIONS=({",".join(options)})"""
 
-    optionString = ",".join(options)
-    code += f", OPTIONS=({optionString})"
-    code += ";"
+    template = self.templates["externaltable"]
+    code = template.replace("$$name$$", tab.table)\
+      .replace("$$schema$$", schemaString)\
+      .replace("$$filenames$$", tab.filenames)\
+      .replace("$$format$$", formatString)\
+      .replace("$$options$$", optionString)
+
+    queries.append(f"DROP TABLE IF EXISTS {tab.table}")
     queries.append(code)
     return queries
 

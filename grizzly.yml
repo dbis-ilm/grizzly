@@ -1,5 +1,6 @@
 postgresql:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$';
 
-vectorh:
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$';
+vector:
+  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
+  externaltable: CREATE EXTERNAL TABLE $$name$$ ($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$' $$format$$ $$options$$
