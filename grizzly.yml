@@ -30,7 +30,7 @@ vectorh:
       def model_load():
         ts = os.path.getmtime(checkpoint_file + ".meta")
         random.graph = tf.Graph()
-        random.model_timestamo = ts
+        random.model_timestamp = ts
         with random.graph.as_default():
           random.sess=tf.Session()
           saver = tf.train.import_meta_graph(checkpoint_file + ".meta")
