@@ -4,7 +4,7 @@ postgresql:
 vectorh:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
   tensorflow_code: |
-    import tensorflow as tf
+    import tensorflow.compat.v1 as tf
     import numpy as np
     from tensorflow.contrib import learn
     import random
@@ -46,9 +46,16 @@ vectorh:
         vocab_load()
         model_load()
         with random.graph.as_default() and random.sess.as_default():
-          x = np.array(list(random.vocab_processor.transform([values[0]])))
           feed_dict = {}
-          feed_dict[random.type_dict[0]] = x
-          feed_dict[random.type_dict[1]] = [constants[1]]
+          for i in range(len(values)):
+            if constants == [] or constants[i] is None:
+              raw = [values[i]]
+              if random.vocab_processor is not None:
+                x = np.array(list(random.vocab_processor.transform(raw)))
+              else:
+                x = raw
+            else:
+              x = [constants[i]]
+            feed_dict[random.type_dict[i]] = x
           return random.sess.run(random.type_dict["output"], feed_dict)[0].item()
       return apply_model([a.lower(), None])
