@@ -256,14 +256,16 @@ class SQLGenerator:
 
       theHash = str(abs(udf.pathHash))
 
-      converter = lambda x: f"'{x}'" if type(x) == str else f"{x}"
+      converter = lambda x: f"\"{x}\"" if type(x) == str else f"{x}"
 
       outDictCode = "[" + ",".join(map(converter, udf.outputDict )) + "]"
+
+      modelParameters = ",".join(map(converter, udf.classParameters)) if udf.classParameters else ""
 
       lines = self.templates["applymodelfunction"]
       lines = lines.replace("$$modelpathhash$$", theHash).replace("$$modelpath$$", udf.path).replace("$$encoderfuncname$$",udf.encoder.__name__)
       lines = lines.replace("$$helpers$$",helperCode).replace("$$encoder$$",encoderCode).replace("$$inputcols$$",paramsStr)
-      lines = lines.replace("$$outputdict$$",outDictCode)
+      lines = lines.replace("$$outputdict$$",outDictCode).replace("$$modelclassparameters$$",modelParameters)
 
       modelCode += udf.classCode
 
