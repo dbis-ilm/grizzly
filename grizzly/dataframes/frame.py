@@ -67,7 +67,7 @@ class DataFrame(object):
 
   
 
-  def map(self, func):
+  def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
@@ -88,8 +88,10 @@ class DataFrame(object):
         p = Param(fp,fptype)
         params.append(p)
 
-      (lines,_) = inspect.getsourcelines(func)
-      # lines = lines[1:]
+      if lines == []:
+        (lines,_) = inspect.getsourcelines(func)
+        lines = DataFrame._unindent(lines[1:])
+
       returns = sig.return_annotation.__name__
       # returns = DataFrame._mapTypes(returns)
 
@@ -140,6 +142,21 @@ class DataFrame(object):
     (lines1, _) = inspect.getsourcelines(input_to_tensor)
     (lines2, _) = inspect.getsourcelines(tensor_to_output)
     return self
+
+  def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
+    code = GrizzlyGenerator._backend.queryGenerator.templates["tensorflow_code"]
+    code = code.replace("$$tf_checkpoint_file$$", tf_checkpoint_file)\
+      .replace("$$vocab_file$$", vocab_file)\
+      .replace("$$network_input_names$$", f"""[{', '.join('"%s"' % n for n in network_input_names)}]""")\
+      .replace("$$constants$$", f"[{','.join(str(item) for item in constants)}]")
+    exec(code)
+    #Split lines but keep line breaks included
+    split = [e+"\n" for e in code.split("\n") if e]
+    split.append("return apply(a)\n")
+    return self._map(locals()['apply'], split)
+
+  def map(self, func):
+    return self._map(func)
   ###################################
   # shortcuts
 

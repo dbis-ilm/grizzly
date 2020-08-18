@@ -321,23 +321,22 @@ class SQLGenerator:
     funcCode = f"{funcStr}({colName})"
     return funcCode
 
-  def _generateAggCode(self, df, col, func):
+  def _generateAggCode(self, df, col, func) -> (List[str],str):
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
-
+    pre = []
     if df.parents:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      prequeries = ";".join(pre)
-      aggSQL = f"{prequeries};SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
       # aggSQL = innerSQL
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
 
-    return aggSQL
+    return (pre, aggSQL)
 
   def generate(self, df) -> (List[str],str):
     qry = Query(self)

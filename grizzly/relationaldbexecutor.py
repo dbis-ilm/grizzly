@@ -144,7 +144,9 @@ class RelationalExecutor(object):
     """
     Really executes the aggregation and returns the single result
     """
-    aggQry = self.queryGenerator._generateAggCode(df, col, func)
+    (pre, aggQry) = self.queryGenerator._generateAggCode(df, col, func)
+    for pq in pre:
+      self._execute(pq).close()
     # execute an SQL query and get the result set
     rs = self._execute(aggQry)
     #fetch first (and only) row, return first column only

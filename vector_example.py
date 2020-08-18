@@ -21,6 +21,9 @@ def myfunc(a: int) -> int:
     else:
         return -1
 
+def addkeys(a: int, b:int) -> int:
+    return a+b
+
 def concatNames(name: str, comment: str) -> str:
     
     if not name or name == "":
