@@ -90,7 +90,6 @@ class DataFrame(object):
 
       if lines == []:
         (lines,_) = inspect.getsourcelines(func)
-        lines = DataFrame._unindent(lines[1:])
 
       returns = sig.return_annotation.__name__
       # returns = DataFrame._mapTypes(returns)
@@ -141,7 +140,17 @@ class DataFrame(object):
   def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
     (lines1, _) = inspect.getsourcelines(input_to_tensor)
     (lines2, _) = inspect.getsourcelines(tensor_to_output)
-    return self
+    test = tensor_to_output.__name__
+    code = GrizzlyGenerator._backend.queryGenerator.templates["onnx_code"]\
+      .replace("$$input_to_tensor_func$$", "".join(lines1))\
+      .replace("$$tensor_to_output_func$$", "".join(lines2))\
+      .replace("$$onnx_file_path$$", onnx_path)\
+      .replace("$$input_to_tensor_func_name$$", input_to_tensor.__name__)\
+      .replace("$$tensor_to_output_func_name$$", tensor_to_output.__name__)
+    exec(code)
+    split = [e + "\n" for e in code.split("\n") if e]
+    split.append("return apply(a)\n")
+    return self._map(locals()['apply'], split)
 
   def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
     code = GrizzlyGenerator._backend.queryGenerator.templates["tensorflow_code"]
