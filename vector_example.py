@@ -44,7 +44,7 @@ def runtimetest(i: int) -> str:
     else:
         return "exists"
 
-def input_to_tensor(input):
+def input_to_tensor(input:str):
     import torch
     from transformers import RobertaForSequenceClassification, RobertaTokenizer
     def to_numpy(tensor):
@@ -55,7 +55,7 @@ def input_to_tensor(input):
     ort_inputs = {random.onnx_session.get_inputs()[0].name: to_numpy(input_ids)}
     return ort_inputs
 
-def tensor_to_output(tensor):
+def tensor_to_output(tensor) -> str:
     import numpy as np
     pred = np.argmax(tensor)
     if (pred == 0):

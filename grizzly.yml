@@ -99,15 +99,15 @@ vectorh:
   onnx_code: |
     import onnxruntime
     import random
-    def apply(a: str) -> str:
+    def apply$$inputs$$ -> $$returntype$$:
       $$input_to_tensor_func$$
 
       $$tensor_to_output_func$$
 
-      def apply_model(a):
+      def apply_model($$input_names$$):
         if not hasattr(random, "onnx_session"):
             random.onnx_session = onnxruntime.InferenceSession("$$onnx_file_path$$")
-        inputs = $$input_to_tensor_func_name$$(a)
+        inputs = $$input_to_tensor_func_name$$($$input_names$$)
         ret = random.onnx_session.run(None, inputs)
         return($$tensor_to_output_func_name$$(ret))
-      return apply_model(a)
+      return apply_model($$input_names$$)
