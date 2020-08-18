@@ -106,16 +106,32 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
-  def predict(self, path: str, toTensorFunc, n_predictions: int = 1, *helperFuncs):
+  def predict(self, path: str, toTensorFunc, clazz, outputDict, n_predictions: int = 1, *helperFuncs):
 
     if not isinstance(self, Projection):
       ValueError("classification can only be applied to a projection")
 
-    modelPathHash = hash(path)
+    (clazzCodeLst,_) = inspect.getsourcelines(clazz)
+
+    clazzCode = "".join(clazzCodeLst)
+
+    modelPathHash = abs(hash(path))
     funcName = f"grizzly_predict_{modelPathHash}"
     attrsString = "_".join([r.column for r in self.attrs])
 
-    udf = ModelUDF(funcName,[Param("inValue", "str"), Param("n_predictions", "int")], "str", path, modelPathHash, toTensorFunc, list(helperFuncs))
+    sig = inspect.signature(toTensorFunc)
+    fparams = sig.parameters
+    if len(fparams) != 1:
+      raise ValueError("toTensor converter must have exactly one parameter")
+
+    toTensorInputType = sig.parameters[list(sig.parameters)[0]].annotation.__name__
+
+    if len(outputDict) <= 0:
+      raise ValueError("output dict must not be empty")
+    #predictedType = type(outputDict[0]).__name__
+    predictedType = "str" # hard coded string because we collect n predictions in a list of strings
+
+    udf = ModelUDF(funcName,[Param("invalue", toTensorInputType), Param("n_predictions", "int")], predictedType, path, modelPathHash, toTensorFunc, outputDict, list(helperFuncs),clazz.__name__, clazzCode)
     call = FuncCall(funcName, self.attrs + [n_predictions] , self,udf, f"predicted_{attrsString}")
 
     return self.project([call])

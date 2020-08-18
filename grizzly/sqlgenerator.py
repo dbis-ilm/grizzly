@@ -148,6 +148,9 @@ class Query:
       # computed attribute
       projs += ", "+computedStr
 
+      # computed columns ore often created by applying some UDF or other calculations
+      # we may first need to create those UDFs in the DBMS
+      # this procudes the corresponding CREATE FUNCTION etc
       self.preQueryCode += [ self.generator.generateCreateFunc(func.udf) for func in computedCols if isinstance(func, FuncCall) ]
 
     grouping = ""
@@ -236,6 +239,10 @@ class SQLGenerator:
   def generateCreateFunc(self, udf: UDF) -> str:
     paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
     returnType = SQLGenerator._mapTypes(udf.returnType)
+
+    modelCode = ""
+    modelClassName = ""
+
     if isinstance(udf, ModelUDF):
       helperCode = "\n"
       for helperFunc in udf.helpers:
@@ -247,17 +254,30 @@ class SQLGenerator:
       encoderCode = SQLGenerator._unindent(encoderCode)
       encoderCode = "".join(encoderCode)
 
+      theHash = str(abs(udf.pathHash))
+
+      converter = lambda x: f"'{x}'" if type(x) == str else f"{x}"
+
+      outDictCode = "[" + ",".join(map(converter, udf.outputDict )) + "]"
+
       lines = self.templates["applymodelfunction"]
-      lines = lines.replace("$$modelpathhash$$", str(udf.pathHash)).replace("$$modelpath$$", udf.path).replace("$$encoderfuncname$$",udf.encoder.__name__).replace("$$helpers$$",helperCode).replace("$$encoder$$",encoderCode).replace("$$inputcols$$",paramsStr)
+      lines = lines.replace("$$modelpathhash$$", theHash).replace("$$modelpath$$", udf.path).replace("$$encoderfuncname$$",udf.encoder.__name__)
+      lines = lines.replace("$$helpers$$",helperCode).replace("$$encoder$$",encoderCode).replace("$$inputcols$$",paramsStr)
+      lines = lines.replace("$$outputdict$$",outDictCode)
+
+      modelCode += udf.classCode
+
     else:
       lines = udf.lines[1:]
       lines = SQLGenerator._unindent(lines)
       lines = "".join(lines)
 
     template = self.templates["createfunction"]
-
+    
     code = template.replace("$$name$$", udf.name).replace("$$inparams$$",paramsStr).replace("$$returntype$$",returnType).replace("$$code$$",lines)
 
+    if modelCode != "":
+      code = code.replace("$$modelclassname$$",udf.modelClassName).replace("$$modelclassdef$$",modelCode)
     return code
 
   @staticmethod
