@@ -136,6 +136,10 @@ class DataFrame(object):
 
     return self.project([call])
 
+  def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
+    (lines1, _) = inspect.getsourcelines(input_to_tensor)
+    (lines2, _) = inspect.getsourcelines(tensor_to_output)
+    return self
   ###################################
   # shortcuts
 
