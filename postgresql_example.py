@@ -116,7 +116,7 @@ def line_to_tensor(line: str):
 
 
 # df1["origin"] = df1[df1.r_name].predict("/names.pt",line_to_tensor,RNN, n_predictions=1)
-df1["origin"] = df1[df1.r_name].predict("/model_dict.pt", toTensorFunc=line_to_tensor,clazz=RNN, outputDict=outputdict, n_predictions=1)
+df1["origin"] = df1[df1.r_name].predict("/model_dict.pt", toTensorFunc=line_to_tensor,clazz=RNN, outputDict=outputdict, clazzParameters=[56,128,18], n_predictions=1)
 
 # df1["summed"] = df1[[df1.r_regionkey, df1.r_regionkey]].map(addkeys2)
 
