@@ -37,7 +37,7 @@ class UDF(object):
     return f"{self.name}({paramString}): {self.returnType}"
 
 class ModelUDF(UDF):
-  def __init__(self, name: str, params: list, returnType: str, path: str, pathHash: str, encoder, outputDict, helpers: list, className: str, classCode: str, classParameters):
+  def __init__(self, name: str, params: list, returnType: str, path: str, pathHash: str, encoder, outputDict, helpers: list, className: str, classCode: str,):
     UDF.__init__(self,name, params, None, returnType)
     self.path = path
     self.pathHash = pathHash

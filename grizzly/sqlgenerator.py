@@ -10,29 +10,14 @@ import inspect
 
 class Query:
 
-  def __init__(self, generator):
+  def __init__(self, generator, alias: str):
     self.generator = generator
-
-    self.filters = []
-    self.projections = None
-    self.doDistinct = False
-    self.table = None
-    self.groupcols = []
-    self.groupagg = set()
-    self.joins = []
-    self.preQueryCode = []
+    self.alias = alias
 
   def _reset(self):
-    self.filters = []
-    self.projections = None
-    self.doDistinct = False
-    self.table = None
-    self.groupcols = []
-    self.groupagg = set()
-    self.joins = []
-    self.preQueryCode = []
+    pass
 
-  def _doExprToSQL(self, expr):
+  def _doExprToSQL(self, expr, alias: str):
     exprSQL = ""
     # right hand side is a string constant
     if isinstance(expr, str):
@@ -40,15 +25,16 @@ class Query:
     # right hand side is a dataframe (i.e. subquery)
     elif isinstance(expr, DataFrame): 
       # if right hand side is a DataFrame, we need to create code first 
-      subQry = Query(self.generator)
-      exprSQL = subQry._buildFrom(expr)
+      subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+      (pre,exprSQL) = subQry._buildFrom(expr)
 
     elif isinstance(expr, ColRef):
+      expr.df.alias = alias
       exprSQL = str(expr)
 
     elif isinstance(expr, Expr):
-      l = self._doExprToSQL(expr.left)
-      r = self._doExprToSQL(expr.right)
+      l = self._doExprToSQL(expr.left, alias)
+      r = self._doExprToSQL(expr.right, alias)
 
       exprSQL = f"{l} {expr.opStr} {r}"
     # right hand side is some constant (other than string), e.g. number
@@ -57,126 +43,85 @@ class Query:
 
     return exprSQL
 
-  def _exprToSQL(self, expr):
-    leftExpr = self._doExprToSQL(expr.left)
-    rightExpr = self._doExprToSQL(expr.right)
+  def _exprToSQL(self, expr, alias: str):
+    leftExpr = self._doExprToSQL(expr.left, alias)
+    rightExpr = self._doExprToSQL(expr.right, alias)
 
     return f"{leftExpr} {expr.opStr} {rightExpr}"
 
   def _buildFrom(self,df):
 
-    computedCols = []
+    if df is not None:
 
-    curr = df
-    while curr is not None:
-
-      computedCols += curr.computedCols        
-
-      if isinstance(curr,Table):
-        self.table = f"{curr.table} {curr.alias}"
-
-      elif isinstance(curr, ExternalTable):
-        self.table = f"{curr.table} {curr.alias}"
-        self.preQueryCode.extend(self.generator._generateCreateExtTable(curr))
-
-      elif isinstance(curr,Projection):
-        if curr.attrs:
-          prefixed = [str(attr) for attr in curr.attrs]
-          if not self.projections:
-            self.projections = prefixed
-          else:
-            # FIXME: does this work? no return, no assignment
-            set(self.projections).intersection(set(prefixed))
+      if isinstance(df,Table):
+        return ([], f"SELECT * FROM {df.table} {self.alias}")
         
 
-        if curr.doDistinct:
-          self.doDistinct = True
+      elif isinstance(df, ExternalTable):
+        return ([self.generator._generateCreateExtTable(df)], f"SELECT * FROM {df.table} {self.alias}")
 
-      elif isinstance(curr,Filter):
-        exprStr = self._exprToSQL(curr.expr)
-        self.filters.append(exprStr)
+      elif isinstance(df,Projection):
+        subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-      elif isinstance(curr, Join):
 
-        if isinstance(curr.right, Table):
-          rightSQL = curr.right.table
-          rtVar = curr.right.alias
-        else:
-          subQry = Query(self.generator)
-          rightSQL = f"({subQry._buildFrom(curr.right)})"
-          rtVar = GrizzlyGenerator._incrAndGetTupleVar()
-          # curr.right.alias = rtVar
-          curr.right.setAlias(rtVar)
+        prefixed = "*"
+        if df.attrs:
+          prefixed = ",".join([str(attr) for attr in df.attrs])
+        
+        return (pre, f"SELECT {'DISTINCT' if df.doDistinct else ''} {prefixed} FROM ({parentSQL}) {self.alias}")
 
-        if isinstance(curr.on, Expr):
-          onSQL = "ON " + self._exprToSQL(curr.on)
-        elif isinstance(curr.on, list):
-          onSQL = f"ON {curr.alias}.{curr.on[0]} {curr.comp} {rtVar}.{curr.on[1]}"
+      elif isinstance(df,Filter):
+        subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
+
+        exprStr = self._exprToSQL(df.expr, subQry.alias)
+
+        return (pre, f"SELECT * FROM ({parentSQL}) {self.alias} WHERE {exprStr}")
+
+      elif isinstance(df, Join):
+
+        lQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        (lpre,lparentSQL) = subQry._buildFrom(df.parents[0])
+
+        rQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        (rpre,rparentSQL) = subQry._buildFrom(df.right)
+
+        if isinstance(df.on, Expr):
+          onSQL = "ON " + self._exprToSQL(df.on)
+        elif isinstance(df.on, list):
+          onSQL = f"ON {df.alias}.{df.on[0]} {df.comp} {rtVar}.{df.on[1]}"
         else:
           onSQL = ""
 
-        joinSQL = f"{curr.how} JOIN {rightSQL} {rtVar} {onSQL}"
-        self.joins.append(joinSQL)
+        # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
+        # self.joins.append(joinSQL)
 
-      elif isinstance(curr, Grouping):
-        self.groupcols = [str(attr) for attr in curr.groupCols]
+        joinSQL = f"SELECT * FROM ({lparentSQL}) {lQry.alias} {df.how} JOIN ({rparentSQL}) {rQry.alias} {onSQL}"
 
-        if curr.aggFunc:
-          (func, col) = curr.aggFunc
-          funcCode = SQLGenerator._getFuncCode(curr, col, func) 
-          self.groupagg.add(funcCode)
+        return (lpre.extend(rpre), joinSQL)
 
-      if curr.parents is None:
-        curr = None
+      elif isinstance(df, Grouping):
+        subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
+
+        groupcols = ",".join([str(attr) for attr in df.groupCols])
+
+        funcCode = ""
+        if df.aggFunc:
+          (func, col) = df.aggFunc
+          funcCode = ", " + SQLGenerator._getFuncCode(df, col, func)
+        
+        groupSQL = f"SELECT {groupcols} {funcCode} FROM ({parentSQL}) {self.alias} GROUP BY {groupcols}"
+
+        return (pre, groupSQL)
+      
       else:
-        curr = curr.parents[0]
+        raise ValueError(f"unsupported operator {type(df)}")
 
-    joins = ""
-    while self.joins:
-      joins += " "+self.joins.pop()
-    
-    projs = "*"
-    if self.projections:
-      if self.groupcols and not set(self.projections).issubset(self.groupcols):
-        raise ValueError("Projection list must be subset of group columns")
+    else:
+      return ""
 
-      projs = ', '.join(self.projections) 
-
-    if computedCols:
-      computedStr = ", ".join([str(c) for c in computedCols])
-      # TODO: this is not really correct if after the map we apply a projection to only this
-      # computed attribute
-      projs += ", "+computedStr
-
-      # computed columns ore often created by applying some UDF or other calculations
-      # we may first need to create those UDFs in the DBMS
-      # this procudes the corresponding CREATE FUNCTION etc
-      self.preQueryCode += [ self.generator.generateCreateFunc(func.udf) for func in computedCols if isinstance(func, FuncCall) ]
-
-    grouping = ""
-    if self.groupcols:
-      theColRefs = ", ".join([str(e) for e in self.groupcols])
-      grouping += f" GROUP BY {theColRefs}"
-
-      if projs == "*":
-        projs = theColRefs
-
-    if len(self.groupagg) > 0:
-      if projs == "*":
-        projs = self.groupagg
-      elif len(self.groupagg) > 0:
-        projs = projs + "," + ",".join(self.groupagg)
-
-    if self.doDistinct:
-      projs = "distinct " + projs
-
-    where = ""
-    if len(self.filters) > 0:
-      exprs = " AND ".join([str(e) for e in self.filters])
-      where += f" WHERE {exprs}"
-
-    qrySoFar = f"SELECT {projs} FROM {self.table}{joins}{where}{grouping}"
-    return qrySoFar
 
 class Config:
 
@@ -344,7 +289,7 @@ class SQLGenerator:
     return (pre, aggSQL)
 
   def generate(self, df) -> (List[str],str):
-    qry = Query(self)
-    qryString = qry._buildFrom(df)
+    qry = Query(self,GrizzlyGenerator._incrAndGetTupleVar())
+    (preQueryCode, qryString) = qry._buildFrom(df)
 
-    return (qry.preQueryCode, qryString)
+    return (preQueryCode, qryString)
