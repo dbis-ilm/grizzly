@@ -59,7 +59,7 @@ class DataFrameTest(CodeMatcher):
   @classmethod
   def setUpClass(cls):
     c = sqlite3.connect("grizzly.db")
-    grizzly.use(RelationalExecutor(c))
+    grizzly.use(RelationalExecutor(c, SQLGenerator("vector")))
 
   @classmethod
   def tearDownClass(cls):
@@ -457,7 +457,7 @@ class DataFrameTest(CodeMatcher):
     actual = df.generateQuery()
     expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float'); " \
+               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float') " \
                "SELECT * FROM temp_ext_table$t0 $t0"
     self.matchSnipped(actual, expected)
 
@@ -465,7 +465,7 @@ class DataFrameTest(CodeMatcher):
     actual = df.generateQuery()
     expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|'); " \
+               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|') " \
                "SELECT * FROM temp_ext_table$t0 $t0"
     self.matchSnipped(actual, expected)
 
@@ -473,7 +473,7 @@ class DataFrameTest(CodeMatcher):
     actual = df.generateQuery()
     expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'=','); " \
+               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'=',') " \
                "SELECT * FROM temp_ext_table$t0 $t0"
     self.matchSnipped(actual, expected)
 
@@ -481,7 +481,7 @@ class DataFrameTest(CodeMatcher):
     actual = df.generateQuery()
     expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=','); " \
+               "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=',') " \
                "SELECT * FROM temp_ext_table$t0 $t0"
     self.matchSnipped(actual, expected)
 

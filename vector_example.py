@@ -13,7 +13,7 @@ from grizzly.sqlgenerator import SQLGenerator
 """
 
 con = pdb.connect("driver=Ingres;servertype=ingres;server=cloud01_docker;database=tpch")
-grizzly.use(RelationalExecutor(con, SQLGenerator("vectorh")))
+grizzly.use(RelationalExecutor(con, SQLGenerator("vector")))
 
 def myfunc(a: int) -> int:
     if a > 0:

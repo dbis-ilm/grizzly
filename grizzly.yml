@@ -38,8 +38,9 @@ postgresql:
 
       return "\n".join(predictions)
 
-vectorh:
+vector:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
+  externaltable: CREATE EXTERNAL TABLE $$name$$ ($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$' $$format$$ $$options$$
   tensorflow_code: |
     import tensorflow.compat.v1 as tf
     import numpy as np
