@@ -21,6 +21,9 @@ def myfunc(a: int) -> int:
     else:
         return -1
 
+def addkeys(a: int, b:int) -> int:
+    return a+b
+
 def concatNames(name: str, comment: str) -> str:
     
     if not name or name == "":
@@ -41,16 +44,28 @@ def runtimetest(i: int) -> str:
     else:
         return "exists"
 
-df1 = grizzly.read_external_files("hdfs://172.21.249.73/user/actian/tpch100/nation.csv",
-                                 ["n_nationkey:int", "n_name:str" , "n_regionkey:int", "n_comment:str"], False)
-df2 = grizzly.read_table("region")
-j = df1.join(df2, on = (df1.n_regionkey == df2.r_regionkey))
+def input_to_tensor(input:str):
+    import torch
+    from transformers import RobertaForSequenceClassification, RobertaTokenizer
+    def to_numpy(tensor):
+        return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
 
-# j["newkey"] = j[df2.r_regionkey].map(myfunc)
-# j["concted"] = j[[df2.r_name, df2.r_comment]].map(concatNames)
-j["accum"] = j[df2.r_regionkey].map(runtimetest)
+    tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
+    input_ids = torch.tensor(tokenizer.encode(input, add_special_tokens=True)).unsqueeze(0)  # Batch size 1
+    ort_inputs = {random.onnx_session.get_inputs()[0].name: to_numpy(input_ids)}
+    return ort_inputs
 
+def tensor_to_output(tensor) -> str:
+    import numpy as np
+    pred = np.argmax(tensor)
+    if (pred == 0):
+        return("Negative")
+    elif (pred == 1):
+        return("Positive")
 
-# print(j.generateQuery())
-j.show(pretty=True, limit=25)
+onnx_path = "/home/actian/roberta-sequence-classification.onnx"
+df = grizzly.read_table("movies")
+df["sentiment"] = df["review"].apply_onnx_model(onnx_path, input_to_tensor, tensor_to_output)
+df.show()
+
 con.close()

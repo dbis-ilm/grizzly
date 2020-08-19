@@ -1,11 +1,12 @@
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import UDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
+from grizzly.dataframes.frame import UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import FuncCall, ColRef, Expr
 from typing import List
 from grizzly.generator import GrizzlyGenerator
 
 import random
 import string
+import inspect
 
 class Query:
 
@@ -147,6 +148,9 @@ class Query:
       # computed attribute
       projs += ", "+computedStr
 
+      # computed columns ore often created by applying some UDF or other calculations
+      # we may first need to create those UDFs in the DBMS
+      # this procudes the corresponding CREATE FUNCTION etc
       self.preQueryCode += [ self.generator.generateCreateFunc(func.udf) for func in computedCols if isinstance(func, FuncCall) ]
 
     grouping = ""
@@ -202,36 +206,80 @@ class Config:
       raise ValueError(f"Unsupported configuration key {key} in profile {self.profile}")
 
 
+from typing import NewType
+SqlBigInt = NewType("bigint", int)
+
+
 class SQLGenerator:
 
   def __init__(self, profile: str = None):
     self.profile = profile
     self.templates = Config.loadProfile(profile)
   
+  @staticmethod
+  def _unindent(lines: list) -> list:
+    firstLine = lines[0]
+
+    numLeadingSpaces = len(firstLine) - len(firstLine.lstrip())
+    resultLines = []
+    for line in lines:
+      resultLines.append(line[numLeadingSpaces:])
+
+    return resultLines
+
+  @staticmethod
+  def _mapTypes(pythonType: str) -> str:
+    if pythonType == "str":
+      return "varchar(255)"
+    # elif pythonType == "long":
+    #   return "bigint"
+    else: 
+      return pythonType
+
   def generateCreateFunc(self, udf: UDF) -> str:
-    paramsStr = ",".join([f"{p.name} {p.type}" for p in udf.params])
-    lines = "".join(udf.lines)
+    paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
+    returnType = SQLGenerator._mapTypes(udf.returnType)
 
-#     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr}) 
-#       return ({udf.returnType})
-#       AS LANGUAGE PYTHON
-#       SOURCE='
-# {lines}
-#       ';
-#     """
+    modelCode = ""
+    modelClassName = ""
 
-#     code = f"""CREATE OR REPLACE FUNCTION {udf.name}({paramsStr})
-#     returns {udf.returnType}
-#     LANGUAGE plpython3u
-#     AS '
-# {lines}
-#     ';
-#     """ 
+    if isinstance(udf, ModelUDF):
+      helperCode = "\n"
+      for helperFunc in udf.helpers:
+        (funcLines,_) = inspect.getsourcelines(helperFunc)
+        funcLines = SQLGenerator._unindent(funcLines)
+        helperCode += "".join(funcLines)
+
+      (encoderCode,_) = inspect.getsourcelines(udf.encoder)
+      encoderCode = SQLGenerator._unindent(encoderCode)
+      encoderCode = "".join(encoderCode)
+
+      theHash = str(abs(udf.pathHash))
+
+      converter = lambda x: f"\"{x}\"" if type(x) == str else f"{x}"
+
+      outDictCode = "[" + ",".join(map(converter, udf.outputDict )) + "]"
+
+      modelParameters = ",".join(map(converter, udf.classParameters)) if udf.classParameters else ""
+
+      lines = self.templates["applymodelfunction"]
+      lines = lines.replace("$$modelpathhash$$", theHash).replace("$$modelpath$$", udf.path).replace("$$encoderfuncname$$",udf.encoder.__name__)
+      lines = lines.replace("$$helpers$$",helperCode).replace("$$encoder$$",encoderCode).replace("$$inputcols$$",paramsStr)
+      lines = lines.replace("$$outputdict$$",outDictCode).replace("$$modelclassparameters$$",modelParameters)
+
+      modelCode += udf.classCode
+
+    else:
+      lines = udf.lines[1:]
+      lines = SQLGenerator._unindent(lines)
+      lines = "".join(lines)
 
     template = self.templates["createfunction"]
+    
+    code = template.replace("$$name$$", udf.name).replace("$$inparams$$",paramsStr).replace("$$returntype$$",returnType).replace("$$code$$",lines)
 
-    code = template.replace("$$name$$", udf.name).replace("$$inparams$$",paramsStr).replace("$$returntype$$",udf.returnType).replace("$$code$$",lines)
-
+    if modelCode != "":
+      code = code.replace("$$modelclassname$$",udf.modelClassName).replace("$$modelclassdef$$",modelCode)
     return code
 
   def _generateCreateExtTable(self, tab: ExternalTable) -> List[str]:
@@ -278,23 +326,22 @@ class SQLGenerator:
     funcCode = f"{funcStr}({colName})"
     return funcCode
 
-  def _generateAggCode(self, df, col, func):
+  def _generateAggCode(self, df, col, func) -> (List[str],str):
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
-
+    pre = []
     if df.parents:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      prequeries = ";".join(pre)
-      aggSQL = f"{prequeries};SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
       # aggSQL = innerSQL
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
 
-    return aggSQL
+    return (pre, aggSQL)
 
   def generate(self, df) -> (List[str],str):
     qry = Query(self)

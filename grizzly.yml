@@ -1,6 +1,114 @@
 postgresql:
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$';
+  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
+
+  applymodelfunction: |
+      import random
+      import torch
+
+      $$modelclassdef$$
+
+      $$helpers$$
+      $$encoder$$
+      if not hasattr(random, "model_$$modelpathhash$$"):
+        #random.model_$$modelpathhash$$ = torch.load("$$modelpath$$")
+        
+        random.model_$$modelpathhash$$ = $$modelclassname$$($$modelclassparameters$$)
+        random.model_$$modelpathhash$$.load_state_dict(torch.load("$$modelpath$$"))
+        
+        random.model_$$modelpathhash$$.eval()
+
+        random.outputDict_$$modelpathhash$$ = $$outputdict$$
+
+      model = random.model_$$modelpathhash$$
+      hidden = model.initHidden()
+
+      tensor = torch.autograd.Variable($$encoderfuncname$$(invalue))
+      for i in range(tensor.size()[0]):
+        output, hidden = model(tensor[i], hidden)
+
+      topv, topi = output.data.topk(n_predictions, 1, True)
+
+      #return str(topi[0][i])+" "+str(topv[0][i])
+      predictions = []
+      for i in range(n_predictions):
+        #value = topv[0][i]
+        cat_index = topi[0][i]
+        out = random.outputDict_$$modelpathhash$$[cat_index]
+        predictions.append(str(out))
+
+      return "\n".join(predictions)
 
 vector:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
   externaltable: CREATE EXTERNAL TABLE $$name$$ ($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$' $$format$$ $$options$$
+  tensorflow_code: |
+    import tensorflow.compat.v1 as tf
+    import numpy as np
+    from tensorflow.contrib import learn
+    import random
+    import os
+    def apply(a: str) -> int:
+      checkpoint_file = "$$tf_checkpoint_file$$"
+      network_input_names = $$network_input_names$$
+      constants = $$constants$$
+      vocab_file = "$$vocab_file$$"
+      def vocab_needs_reload():
+        ts = os.path.getmtime(vocab_file)
+        return (not hasattr(random, "vocab_timestamp") or (ts != random.vocab_timestamp))
+
+      def model_needs_reload():
+        ts = os.path.getmtime(checkpoint_file + ".meta")
+        return (not hasattr(random, "model_timestamp") or (ts != random.model_timestamp))
+
+      def vocab_load():
+        ts = os.path.getmtime(vocab_file)
+        random.vocab_timestamp = ts
+        random.vocab_processor = learn.preprocessing.VocabularyProcessor.restore(vocab_file)
+
+      def model_load():
+        ts = os.path.getmtime(checkpoint_file + ".meta")
+        random.graph = tf.Graph()
+        random.model_timestamp = ts
+        with random.graph.as_default():
+          random.sess=tf.Session()
+          saver = tf.train.import_meta_graph(checkpoint_file + ".meta")
+          saver.restore(random.sess, checkpoint_file)
+          random.type_dict = {}
+          for i in range(len(network_input_names)):
+            random.type_dict[i] = random.graph.get_operation_by_name(network_input_names[i]).outputs[0]
+          random.type_dict["output"] = random.graph.get_operation_by_name("output/predictions").outputs[0]
+
+      def apply_model(values):
+        if (vocab_needs_reload()): vocab_load()
+        if (model_needs_reload()): model_load()
+        vocab_load()
+        model_load()
+        with random.graph.as_default() and random.sess.as_default():
+          feed_dict = {}
+          for i in range(len(values)):
+            if constants == [] or constants[i] is None:
+              raw = [values[i]]
+              if random.vocab_processor is not None:
+                x = np.array(list(random.vocab_processor.transform(raw)))
+              else:
+                x = raw
+            else:
+              x = [constants[i]]
+            feed_dict[random.type_dict[i]] = x
+          return random.sess.run(random.type_dict["output"], feed_dict)[0].item()
+      return apply_model([a.lower(), None])
+  onnx_code: |
+    import onnxruntime
+    import random
+    def apply$$inputs$$ -> $$returntype$$:
+      $$input_to_tensor_func$$
+
+      $$tensor_to_output_func$$
+
+      def apply_model($$input_names$$):
+        if not hasattr(random, "onnx_session"):
+            random.onnx_session = onnxruntime.InferenceSession("$$onnx_file_path$$")
+        inputs = $$input_to_tensor_func_name$$($$input_names$$)
+        ret = random.onnx_session.run(None, inputs)
+        return($$tensor_to_output_func_name$$(ret))
+      return apply_model($$input_names$$)

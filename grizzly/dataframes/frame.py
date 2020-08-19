@@ -1,9 +1,10 @@
 from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, FuncCall, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
-from grizzly.expression import UDF, Param
+from grizzly.expression import ModelUDF,UDF, Param
 
 import inspect
+
 ###########################################################################
 # Base DataFrame with common operations
 
@@ -64,25 +65,9 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
-  @staticmethod
-  def _unindent(lines: list) -> list:
-    firstLine = lines[0]
+  
 
-    numLeadingSpaces = len(firstLine) - len(firstLine.lstrip())
-    resultLines = []
-    for line in lines:
-      resultLines.append(line[numLeadingSpaces:])
-
-    return resultLines
-
-  @staticmethod
-  def _mapTypes(pythonType: str) -> str:
-    if pythonType == "str":
-      return "varchar(255)"
-    else: 
-      return pythonType
-
-  def map(self, func):
+  def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
@@ -98,15 +83,16 @@ class DataFrame(object):
       params = []
       for fp in fparams:
         fptype = sig.parameters[fp].annotation.__name__
-        fptype = DataFrame._mapTypes(fptype)
+        # fptype = DataFrame._mapTypes(fptype)
 
         p = Param(fp,fptype)
         params.append(p)
 
-      (lines,_) = inspect.getsourcelines(func)
-      lines = DataFrame._unindent(lines[1:])
+      if lines == []:
+        (lines,_) = inspect.getsourcelines(func)
+
       returns = sig.return_annotation.__name__
-      returns = DataFrame._mapTypes(returns)
+      # returns = DataFrame._mapTypes(returns)
 
       # print(f"{funcName} has {len(lines)} lines and {len(params)} parameters and returns {returns}")
 
@@ -121,6 +107,80 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
+  def predict(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: list, n_predictions: int = 1, *helperFuncs):
+
+    if not isinstance(self, Projection):
+      ValueError("classification can only be applied to a projection")
+
+    (clazzCodeLst,_) = inspect.getsourcelines(clazz)
+
+    clazzCode = "".join(clazzCodeLst)
+
+    modelPathHash = abs(hash(path))
+    funcName = f"grizzly_predict_{modelPathHash}"
+    attrsString = "_".join([r.column for r in self.attrs])
+
+    sig = inspect.signature(toTensorFunc)
+    fparams = sig.parameters
+    if len(fparams) != 1:
+      raise ValueError("toTensor converter must have exactly one parameter")
+
+    toTensorInputType = sig.parameters[list(sig.parameters)[0]].annotation.__name__
+
+    if len(outputDict) <= 0:
+      raise ValueError("output dict must not be empty")
+    #predictedType = type(outputDict[0]).__name__
+    predictedType = "str" # hard coded string because we collect n predictions in a list of strings
+
+    udf = ModelUDF(funcName,[Param("invalue", toTensorInputType), Param("n_predictions", "int")], predictedType, path, modelPathHash, toTensorFunc, outputDict, list(helperFuncs),clazz.__name__, clazzCode, clazzParameters)
+    call = FuncCall(funcName, self.attrs + [n_predictions] , self,udf, f"predicted_{attrsString}")
+
+    return self.project([call])
+
+  def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
+    in_sig = inspect.signature(input_to_tensor)
+    input_names = list(in_sig.parameters.keys())
+    input_names_str = ','.join(input_names)
+    (lines1, _) = inspect.getsourcelines(input_to_tensor)
+    for param in in_sig.parameters:
+      type = in_sig.parameters[param].annotation.__name__
+      if (type == "_empty"):
+        raise ValueError("Input converter function must specify parameter types")
+
+    out_sig = inspect.signature(tensor_to_output)
+    (lines2, _) = inspect.getsourcelines(tensor_to_output)
+    returntype = out_sig.return_annotation.__name__
+    if (returntype == "_empty"):
+      raise ValueError("Output converter function must specify the return type")
+
+    code = GrizzlyGenerator._backend.queryGenerator.templates["onnx_code"] \
+      .replace("$$inputs$$", str(in_sig)) \
+      .replace("$$returntype$$", returntype)\
+      .replace("$$input_to_tensor_func$$", "".join(lines1))\
+      .replace("$$tensor_to_output_func$$", "".join(lines2)) \
+      .replace("$$input_names$$", input_names_str) \
+      .replace("$$onnx_file_path$$", onnx_path)\
+      .replace("$$input_to_tensor_func_name$$", input_to_tensor.__name__)\
+      .replace("$$tensor_to_output_func_name$$", tensor_to_output.__name__)
+    exec(code)
+    split = [e + "\n" for e in code.split("\n") if e]
+    split.append(f"return apply({input_names_str})\n")
+    return self._map(locals()['apply'], split)
+
+  def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
+    code = GrizzlyGenerator._backend.queryGenerator.templates["tensorflow_code"]
+    code = code.replace("$$tf_checkpoint_file$$", tf_checkpoint_file)\
+      .replace("$$vocab_file$$", vocab_file)\
+      .replace("$$network_input_names$$", f"""[{', '.join('"%s"' % n for n in network_input_names)}]""")\
+      .replace("$$constants$$", f"[{','.join(str(item) for item in constants)}]")
+    exec(code)
+    #Split lines but keep line breaks included
+    split = [e+"\n" for e in code.split("\n") if e]
+    split.append("return apply(a)\n")
+    return self._map(locals()['apply'], split)
+
+  def map(self, func):
+    return self._map(func)
   ###################################
   # shortcuts
 
