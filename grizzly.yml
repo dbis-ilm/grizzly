@@ -12,7 +12,7 @@ postgresql:
       if not hasattr(random, "model_$$modelpathhash$$"):
         #random.model_$$modelpathhash$$ = torch.load("$$modelpath$$")
         
-        random.model_$$modelpathhash$$ = $$modelclassname$$(56,128,18)
+        random.model_$$modelpathhash$$ = $$modelclassname$$($$modelclassparameters$$)
         random.model_$$modelpathhash$$.load_state_dict(torch.load("$$modelpath$$"))
         
         random.model_$$modelpathhash$$.eval()

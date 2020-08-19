@@ -37,7 +37,7 @@ class UDF(object):
     return f"{self.name}({paramString}): {self.returnType}"
 
 class ModelUDF(UDF):
-  def __init__(self, name: str, params: list, returnType: str, path: str, pathHash: str, encoder, outputDict, helpers: list, className: str, classCode: str):
+  def __init__(self, name: str, params: list, returnType: str, path: str, pathHash: str, encoder, outputDict, helpers: list, className: str, classCode: str, classParameters):
     UDF.__init__(self,name, params, None, returnType)
     self.path = path
     self.pathHash = pathHash
@@ -46,6 +46,7 @@ class ModelUDF(UDF):
     self.helpers = helpers
     self.modelClassName = className
     self.classCode = classCode
+    self.classParameters = classParameters
 
 class FuncCall(Expr):
   def __init__(self, funcName: str, inputCols: list, df, udf: UDF, alias: str = ""):
