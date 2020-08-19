@@ -1,3 +1,9 @@
+from enum import Enum
+class ModelType(Enum):
+  TORCH = 1
+  TF = 2
+  ONNX = 3
+
 class ExpressionException(Exception):
   pass
 
@@ -37,8 +43,9 @@ class UDF(object):
     return f"{self.name}({paramString}): {self.returnType}"
 
 class ModelUDF(UDF):
-  def __init__(self, name: str, params: list, returnType: str, path: str, pathHash: str, encoder, outputDict, helpers: list, className: str, classCode: str, classParameters):
+  def __init__(self, name: str, params: list, returnType: str, modelType:ModelType, path: str, pathHash: str, encoder, outputDict, helpers: list, className: str, classCode: str, classParameters):
     UDF.__init__(self,name, params, None, returnType)
+    self.modelType = modelType
     self.path = path
     self.pathHash = pathHash
     self.encoder = encoder

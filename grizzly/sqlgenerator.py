@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import FuncCall, ColRef, Expr
+from grizzly.expression import FuncCall, ColRef, Expr, ModelType
 from typing import List
 from grizzly.generator import GrizzlyGenerator
 

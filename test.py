@@ -445,7 +445,7 @@ class DataFrameTest(CodeMatcher):
         return []
 
     df = grizzly.read_table("events") 
-    df["blubb"] = df[df.n_nation].predict("/tmp/mymodel.pt",stringToTensor, 1, isEmptyString)
+    df["blubb"] = df[df.n_nation].apply_torch_model("/tmp/mymodel.pt", stringToTensor, 1, isEmptyString)
 
     actual = df.generateQuery()
     print(actual)
