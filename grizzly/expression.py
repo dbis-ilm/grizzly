@@ -75,7 +75,7 @@ class ColRef(Expr):
     self.alias = alias
 
   def __str__(self):
-    if self.df.alias and self.column != "*":
+    if self.df and self.df.alias and self.column != "*":
       s = f"{self.df.alias}.{self.column}"
     else:
       s = self.column

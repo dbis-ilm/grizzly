@@ -146,6 +146,25 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_groupByComputedCol(self):
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
+
+    def mymod(s: str) -> int:
+      return len(s) % 2
+    
+    df = grizzly.read_table("events")
+    df["computed"] = df[df.globaleventid].map(mymod)
+    df = df.groupby("computed")
+    df = df.agg(col = "*", aggType = AggregateType.COUNT)
+    
+    code = df.generateQuery()
+    print(code)
+    GrizzlyGenerator._backend.queryGenerator = oldGen
+
   def test_groupByWithAggTwice(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 476829606]

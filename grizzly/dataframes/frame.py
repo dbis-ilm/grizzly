@@ -405,10 +405,19 @@ class Filter(DataFrame):
 class Grouping(DataFrame):
 
   def __init__(self, groupCols, parent):
-    if not isinstance(groupCols[0], ColRef):
-      self.groupCols = [ColRef(col, parent) for col in groupCols]
-    else:
-      self.groupCols = groupCols
+    self.groupCols = []
+    computedAliases = [c.alias for c in parent.computedCols]
+    for theCol in groupCols:
+      if not isinstance(theCol, ColRef):
+        # self.groupCols = [ColRef(col, parent) for col in groupCols]
+        theRef = None
+        if theCol in computedAliases:
+          theRef = ColRef(theCol, None)
+        else:
+          theRef = ColRef(theCol, parent)
+        self.groupCols.append(theRef)
+      else:
+        self.groupCols.appennd(theCol)
     
     self.aggFunc = None
 
