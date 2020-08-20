@@ -57,7 +57,7 @@ class FuncCall(Expr):
     self.alias = alias
 
   def __str__(self):
-    cols = [str(c) for c in self.inputCols]
+    cols = [f"{self.df.alias}.{c.column}" for c in self.inputCols]
     colsStr = ", ".join(cols)
     s = f"{self.funcName}({colsStr})"
 

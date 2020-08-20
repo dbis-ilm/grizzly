@@ -4,7 +4,6 @@ from grizzly.aggregates import AggregateType
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
 import inspect
-from itertools import chain
 
 ###########################################################################
 # Base DataFrame with common operations
@@ -62,7 +61,11 @@ class DataFrame(object):
     return Projection(cols, self)
 
   def distinct(self):
-    return Projection(None, self, doDistinct = True)
+    if isinstance(self, Projection):
+      self.doDistinct = True
+      return self
+    else:
+      return Projection(None, self, doDistinct = True)
 
   def join(self, other, on, how="inner", comp = "="):
 
@@ -249,7 +252,7 @@ class DataFrame(object):
   def __setitem__(self, key, value):
     if isinstance(value, Projection):
       value.attrs[0].alias = key
-      newCol = value.attrs[0]
+      newCol = value.parents[0].parents[0].updateRef(value.attrs[0])
     else:
       newCol = ColRef(value, self, key)
     
@@ -413,7 +416,7 @@ class DataFrame(object):
   
   def generateQuery(self):
     (pre,qry) = self.generate()
-    prequeries = "" if not pre else ";".join(chain.from_iterable(pre))
+    prequeries = "" if not pre else ";".join(pre)
     return f"{prequeries} {qry}"
 
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):

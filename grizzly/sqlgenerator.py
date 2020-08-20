@@ -49,7 +49,7 @@ class Query:
 
     return f"{leftExpr} {expr.opStr} {rightExpr}"
 
-  def _buildFrom(self,df):
+  def _buildFrom(self,df) -> (List[str], str):
 
     if df is not None:
 
@@ -73,7 +73,7 @@ class Query:
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + [self.generator._generateCreateExtTable(df)], f"SELECT {proj} FROM {df.table} {df.alias}")
+        return (preCode + self.generator._generateCreateExtTable(df), f"SELECT {proj} FROM {df.table} {df.alias}")
 
       elif isinstance(df,Projection):
         subQry = Query(self.generator)
@@ -265,7 +265,7 @@ class SQLGenerator:
     return queries
 
   @staticmethod
-  def _getFuncCode(df, col, func):
+  def _getFuncCode(df, col, func) -> str:
     if not isinstance(col, ColRef):
       colName = ColRef(col, df)
     else:

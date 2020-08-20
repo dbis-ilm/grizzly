@@ -80,8 +80,8 @@ class DataFrameTest(CodeMatcher):
     df = df["a"]
     df = df[df["a"] == 2]
 
-    df2 = grizzly.read_table("events")
-    df3 = df.join(df2,on=["a","a"])
+    # df2 = grizzly.read_table("events")
+    # df3 = df.join(df2,on=["a","a"])
     actualDF = df.generateQuery()
     expectedDF = "select $t0.a from events $t0 where $t0.a = 2"
 
@@ -156,8 +156,8 @@ class DataFrameTest(CodeMatcher):
     def mymod(s: str) -> int:
       return len(s) % 2
     
-    df = grizzly.read_table("events")
-    df["computed"] = df[df.globaleventid].map(mymod)
+    df = grizzly.read_table("nation")
+    df["computed"] = df[df.n_name].map(mymod)
     df = df.groupby("computed")
     df = df.agg(col = "*", aggType = AggregateType.COUNT)
     
@@ -254,7 +254,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("events")
     df = df.distinct()
     actual = df.generateQuery()
-    expected = "SELECT distinct * FROM events $t1".lower()
+    expected = "SELECT distinct * FROM events $t1"
     self.matchSnipped(actual, expected)
 
   def test_DistinctOneCol(self):
