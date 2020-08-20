@@ -10,14 +10,14 @@ import inspect
 
 class Query:
 
-  def __init__(self, generator, alias: str):
+  def __init__(self, generator):
     self.generator = generator
-    self.alias = alias
+    # self.alias = alias
 
   def _reset(self):
     pass
 
-  def _doExprToSQL(self, expr, alias: str):
+  def _doExprToSQL(self, expr):
     exprSQL = ""
     # right hand side is a string constant
     if isinstance(expr, str):
@@ -29,12 +29,12 @@ class Query:
       (pre,exprSQL) = subQry._buildFrom(expr)
 
     elif isinstance(expr, ColRef):
-      expr.df.alias = alias
       exprSQL = str(expr)
+      # exprSQL = f"{alias}.{expr.column}"
 
     elif isinstance(expr, Expr):
-      l = self._doExprToSQL(expr.left, alias)
-      r = self._doExprToSQL(expr.right, alias)
+      l = self._doExprToSQL(expr.left)
+      r = self._doExprToSQL(expr.right)
 
       exprSQL = f"{l} {expr.opStr} {r}"
     # right hand side is some constant (other than string), e.g. number
@@ -43,9 +43,9 @@ class Query:
 
     return exprSQL
 
-  def _exprToSQL(self, expr, alias: str):
-    leftExpr = self._doExprToSQL(expr.left, alias)
-    rightExpr = self._doExprToSQL(expr.right, alias)
+  def _exprToSQL(self, expr):
+    leftExpr = self._doExprToSQL(expr.left)
+    rightExpr = self._doExprToSQL(expr.right)
 
     return f"{leftExpr} {expr.opStr} {rightExpr}"
 
@@ -53,56 +53,84 @@ class Query:
 
     if df is not None:
 
+      computedCols = ""
+      preCode = []
+
+      if df.computedCols:
+        computedCols = ",".join(str(x) for x in df.computedCols)
+        preCode = [self.generator.generateCreateFunc(call.udf) for call in df.computedCols if isinstance(call, FuncCall)]
+
       if isinstance(df,Table):
-        return ([], f"SELECT * FROM {df.table} {self.alias}")
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+          
+        return (preCode, f"SELECT {proj} FROM {df.table} {df.alias}")
         
 
       elif isinstance(df, ExternalTable):
-        return ([self.generator._generateCreateExtTable(df)], f"SELECT * FROM {df.table} {self.alias}")
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+
+        return (preCode + [self.generator._generateCreateExtTable(df)], f"SELECT {proj} FROM {df.table} {df.alias}")
 
       elif isinstance(df,Projection):
-        subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
 
         prefixed = "*"
         if df.attrs:
           prefixed = ",".join([str(attr) for attr in df.attrs])
+
+        if computedCols:
+          prefixed += ","+computedCols
         
-        return (pre, f"SELECT {'DISTINCT' if df.doDistinct else ''} {prefixed} FROM ({parentSQL}) {self.alias}")
+        return (preCode + pre, f"SELECT {'DISTINCT' if df.doDistinct else ''} {prefixed} FROM ({parentSQL}) {df.alias}")
 
       elif isinstance(df,Filter):
-        subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        exprStr = self._exprToSQL(df.expr, subQry.alias)
+        exprStr = self._exprToSQL(df.expr)
 
-        return (pre, f"SELECT * FROM ({parentSQL}) {self.alias} WHERE {exprStr}")
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+
+        return (preCode + pre, f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}")
 
       elif isinstance(df, Join):
 
-        lQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
-        (lpre,lparentSQL) = subQry._buildFrom(df.parents[0])
+        lQry = Query(self.generator)
+        (lpre,lparentSQL) = lQry._buildFrom(df.parents[0])
 
-        rQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
-        (rpre,rparentSQL) = subQry._buildFrom(df.right)
+        rQry = Query(self.generator)
+        (rpre,rparentSQL) = rQry._buildFrom(df.right)
+
+        lAlias = GrizzlyGenerator._incrAndGetTupleVar()
+        rAlias = GrizzlyGenerator._incrAndGetTupleVar()
 
         if isinstance(df.on, Expr):
           onSQL = "ON " + self._exprToSQL(df.on)
         elif isinstance(df.on, list):
-          onSQL = f"ON {df.alias}.{df.on[0]} {df.comp} {rtVar}.{df.on[1]}"
+          onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
         else:
           onSQL = ""
 
         # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
         # self.joins.append(joinSQL)
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
 
-        joinSQL = f"SELECT * FROM ({lparentSQL}) {lQry.alias} {df.how} JOIN ({rparentSQL}) {rQry.alias} {onSQL}"
+        joinSQL = f"SELECT {proj} FROM ({lparentSQL}) {lAlias} {df.how} JOIN ({rparentSQL}) {rAlias} {onSQL}"
 
-        return (lpre.extend(rpre), joinSQL)
+        return (preCode + lpre + rpre, joinSQL)
 
       elif isinstance(df, Grouping):
-        subQry = Query(self.generator, GrizzlyGenerator._incrAndGetTupleVar())
+        subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
         groupcols = ",".join([str(attr) for attr in df.groupCols])
@@ -112,9 +140,14 @@ class Query:
           (func, col) = df.aggFunc
           funcCode = ", " + SQLGenerator._getFuncCode(df, col, func)
         
-        groupSQL = f"SELECT {groupcols} {funcCode} FROM ({parentSQL}) {self.alias} GROUP BY {groupcols}"
+        groupSQL = f"SELECT {groupcols} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {groupcols}"
 
-        return (pre, groupSQL)
+        if computedCols:
+          tVar = GrizzlyGenerator._incrAndGetTupleVar()
+          proj = "*,"+computedCols
+          groupSQL = f"SELECT {proj} FROM {groupSQL} {tVar}"
+
+        return (preCode + pre, groupSQL)
       
       else:
         raise ValueError(f"unsupported operator {type(df)}")
@@ -289,7 +322,7 @@ class SQLGenerator:
     return (pre, aggSQL)
 
   def generate(self, df) -> (List[str],str):
-    qry = Query(self,GrizzlyGenerator._incrAndGetTupleVar())
+    qry = Query(self)
     (preQueryCode, qryString) = qry._buildFrom(df)
 
     return (preQueryCode, qryString)

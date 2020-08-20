@@ -4,6 +4,7 @@ from grizzly.aggregates import AggregateType
 from grizzly.expression import ModelUDF,UDF, Param
 
 import inspect
+from itertools import chain
 
 ###########################################################################
 # Base DataFrame with common operations
@@ -21,6 +22,21 @@ class DataFrame(object):
       self.parents = parents
     else:
       self.parents = [parents]
+
+  def updateRef(self, x):
+    if isinstance(x,ColRef):
+      x.df = self
+      return x
+    elif isinstance(x, FuncCall):
+      x.df = self
+      return x
+    elif isinstance(x, str): # if only a string was given as column name
+      ref = ColRef(x, self)
+      return ref
+    elif isinstance(x, Expr):
+      x.left = self.updateRef(x.left) if isinstance(x.left, Expr) else x.left
+      x.right = self.updateRef(x.right) if isinstance(x.right, Expr) else x.right
+      return x
 
   def hasColumn(self, colName):
     if not self.columns:
@@ -132,7 +148,10 @@ class DataFrame(object):
     #predictedType = type(outputDict[0]).__name__
     predictedType = "str" # hard coded string because we collect n predictions in a list of strings
 
-    udf = ModelUDF(funcName,[Param("invalue", toTensorInputType), Param("n_predictions", "int")], predictedType, path, modelPathHash, toTensorFunc, outputDict, list(helperFuncs),clazz.__name__, clazzCode, clazzParameters)
+    udf = ModelUDF(funcName,[Param("invalue", toTensorInputType), Param("n_predictions", "int")],\
+      predictedType, path, modelPathHash, toTensorFunc, outputDict, list(helperFuncs),clazz.__name__,\
+      clazzCode, clazzParameters)
+
     call = FuncCall(funcName, self.attrs + [n_predictions] , self,udf, f"predicted_{attrsString}")
 
     return self.project([call])
@@ -185,7 +204,7 @@ class DataFrame(object):
   # shortcuts
 
   def __getattr__(self, name):
-    return self.project([ColRef(name, self)])
+    return self.project(name)
 
   # magic function for write access by index: []
   def __setitem__(self, key, value):
@@ -232,8 +251,11 @@ class DataFrame(object):
   # Comparison expressions
 
   def __eq__(self, other):
-    if not isinstance(self, Projection) or len(self.attrs) != 1:
-      raise ExpressionException(f"Must have a projection with exactly one attribute. Got {type(self)}")
+    if not isinstance(self, Projection):
+      raise ExpressionException(f"Must have a projection to access fields, but got {type(self)}")
+    if len(self.attrs) != 1:
+      attrsStr = ",".join([str(x) for x in self.attrs]) if self.attrs else ""
+      raise ExpressionException(f"Projection list must have exactly one column, but is: {len(self.attrs)}: [{attrsStr}]")
 
     if isinstance(other, DataFrame):
       r = other.attrs[0]
@@ -352,7 +374,7 @@ class DataFrame(object):
   
   def generateQuery(self):
     (pre,qry) = self.generate()
-    prequeries = ";".join(pre)
+    prequeries = "" if not pre else ";".join(chain.from_iterable(pre))
     return f"{prequeries} {qry}"
 
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
@@ -387,19 +409,25 @@ class ExternalTable(DataFrame):
 class Projection(DataFrame):
 
   def __init__(self, attrs, parent, doDistinct = False):
-    if attrs and not (isinstance(attrs[0], ColRef) or isinstance(attrs[0], FuncCall)):
-      self.attrs = [ColRef(attr, parent) for attr in attrs]
+    if attrs:
+      self.attrs = [self.updateRef(x) for x in attrs] if not isinstance(attrs,str) else [ColRef(attrs, self)]
     else:
-      self.attrs = attrs
+      self.attrs = []
+    
+
+    # if attrs and not (isinstance(attrs[0], ColRef) or isinstance(attrs[0], FuncCall)):
+    #   self.attrs = [ColRef(attr, self) for attr in attrs]
+    # else:
+    #   self.attrs = attrs
 
     self.doDistinct = doDistinct
-    super().__init__(self.attrs, parent, parent.alias)
+    super().__init__(self.attrs, parent, GrizzlyGenerator._incrAndGetTupleVar())
 
 class Filter(DataFrame):
 
-  def __init__(self, expr, parent):
-    super().__init__(parent.columns, parent, parent.alias)
-    self.expr = expr
+  def __init__(self, expr: Expr, parent: DataFrame):
+    super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    self.expr = self.updateRef(expr)
  
 
 class Grouping(DataFrame):
@@ -414,14 +442,15 @@ class Grouping(DataFrame):
         if theCol in computedAliases:
           theRef = ColRef(theCol, None)
         else:
-          theRef = ColRef(theCol, parent)
+          theRef = ColRef(theCol, self)
         self.groupCols.append(theRef)
       else:
-        self.groupCols.appennd(theCol)
+        theCol.df = self
+        self.groupCols.append(theCol)
     
     self.aggFunc = None
 
-    super().__init__(self.groupCols, parent, parent.alias)
+    super().__init__(self.groupCols, parent, GrizzlyGenerator._incrAndGetTupleVar())
 
   def agg(self, aggType, col):
     self.aggFunc = (aggType, col)
@@ -429,7 +458,7 @@ class Grouping(DataFrame):
 
 class Join(DataFrame):
   def __init__(self, parent, other, on, how, comp):
-    super().__init__(parent.columns.extend(other.columns), parent, parent.alias)
+    super().__init__(parent.columns.extend(other.columns), parent, GrizzlyGenerator._incrAndGetTupleVar())
     self.right = other
     self.on = on
     self.how = how
