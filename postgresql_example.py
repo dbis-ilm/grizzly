@@ -114,11 +114,32 @@ def line_to_tensor(line: str):
       tensor[li][0][letter_index] = 1
   return tensor
 
+def input_to_tensor(input:str):
+    import torch
+    from transformers import RobertaForSequenceClassification, RobertaTokenizer
+    def to_numpy(tensor):
+        return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+    tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
+    input_ids = torch.tensor(tokenizer.encode(input, add_special_tokens=True)).unsqueeze(0)  # Batch size 1
+    ort_inputs = {random.onnx_session.get_inputs()[0].name: to_numpy(input_ids)}
+    return ort_inputs
+
+def tensor_to_output(tensor) -> str:
+    import numpy as np
+    pred = np.argmax(tensor)
+    if (pred == 0):
+        return("Negative")
+    elif (pred == 1):
+        return("Positive")
 
 # df1["origin"] = df1[df1.r_name].predict("/names.pt",line_to_tensor,RNN, n_predictions=1)
-df1["origin"] = df1[df1.r_name].apply_torch_model("/model_dict.pt", toTensorFunc=line_to_tensor, clazz=RNN, outputDict=outputdict, clazzParameters=[56, 128, 18], n_predictions=1)
+df1["torch"] = df1[df1.r_name].apply_torch_model("/model_dict.pt", toTensorFunc=line_to_tensor, clazz=RNN, outputDict=outputdict, clazzParameters=[56, 128, 18], n_predictions=1)
 
 # df1["summed"] = df1[[df1.r_regionkey, df1.r_regionkey]].map(addkeys2)
+
+onnx_path = "/roberta-sequence-classification.onnx"
+df1["onnx"] = df1[df1.r_comment].apply_onnx_model(onnx_path, input_to_tensor, tensor_to_output)
 
 print(df1.generateQuery())
 df1.show(pretty=True)

@@ -37,6 +37,22 @@ postgresql:
         predictions.append(str(out))
 
       return "\n".join(predictions)
+  ONNX_code: |
+    import onnxruntime
+    import random
+    def apply$$inputs$$ -> $$returntype$$:
+      $$input_to_tensor_func$$
+
+      $$tensor_to_output_func$$
+
+      def apply_model($$input_names$$):
+        if not hasattr(random, "onnx_session"):
+            random.onnx_session = onnxruntime.InferenceSession("$$onnx_file_path$$")
+        inputs = $$input_to_tensor_func_name$$($$input_names$$)
+        ret = random.onnx_session.run(None, inputs)
+        return($$tensor_to_output_func_name$$(ret))
+      return apply_model($$input_names$$)
+    return apply($$input_names$$)
 
 vector:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
