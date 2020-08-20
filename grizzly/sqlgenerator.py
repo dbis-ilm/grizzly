@@ -243,7 +243,7 @@ class SQLGenerator:
     if isinstance(udf, ModelUDF):
       lines = self.templates[udf.modelType.name + "_code"]
       for key, value in udf.templace_replacement_dict.items():
-        lines = lines.replace(key, value)
+        lines = lines.replace(key, str(value))
 
     else:
       lines = udf.lines[1:]
