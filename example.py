@@ -8,7 +8,7 @@ grizzly.use(RelationalExecutor(con))
 
 df = grizzly.read_table("events")
 
-df[df["globaleventid"] == 470747760] # filter
+df = df[df["globaleventid"] == 470747760] # filter
 df = df[["actor1name","actor2name"]]
 
 df.show(pretty=True)
