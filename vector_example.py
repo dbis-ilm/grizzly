@@ -68,4 +68,13 @@ df = grizzly.read_table("movies")
 df["sentiment"] = df["review"].apply_onnx_model(onnx_path, input_to_tensor, tensor_to_output)
 df.show()
 
+print("===========================")
+
+vocab_file = "/home/actian/model/vocab"
+checkpoint_file = "/home/actian/model/checkpoints/model-1000"
+df1 = grizzly.read_table("movies")
+df1["new"] = df1[df1.review].apply_tensorflow_model(checkpoint_file, ["input_x", "dropout_keep_prob"], [None, 1.0], vocab_file)
+df1.show()
+
+
 con.close()

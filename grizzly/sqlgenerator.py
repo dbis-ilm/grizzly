@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import FuncCall, ColRef, Expr
+from grizzly.expression import FuncCall, ColRef, Expr, ModelType
 from typing import List
 from grizzly.generator import GrizzlyGenerator
 
@@ -240,34 +240,10 @@ class SQLGenerator:
     paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
     returnType = SQLGenerator._mapTypes(udf.returnType)
 
-    modelCode = ""
-    modelClassName = ""
-
     if isinstance(udf, ModelUDF):
-      helperCode = "\n"
-      for helperFunc in udf.helpers:
-        (funcLines,_) = inspect.getsourcelines(helperFunc)
-        funcLines = SQLGenerator._unindent(funcLines)
-        helperCode += "".join(funcLines)
-
-      (encoderCode,_) = inspect.getsourcelines(udf.encoder)
-      encoderCode = SQLGenerator._unindent(encoderCode)
-      encoderCode = "".join(encoderCode)
-
-      theHash = str(abs(udf.pathHash))
-
-      converter = lambda x: f"\"{x}\"" if type(x) == str else f"{x}"
-
-      outDictCode = "[" + ",".join(map(converter, udf.outputDict )) + "]"
-
-      modelParameters = ",".join(map(converter, udf.classParameters)) if udf.classParameters else ""
-
-      lines = self.templates["applymodelfunction"]
-      lines = lines.replace("$$modelpathhash$$", theHash).replace("$$modelpath$$", udf.path).replace("$$encoderfuncname$$",udf.encoder.__name__)
-      lines = lines.replace("$$helpers$$",helperCode).replace("$$encoder$$",encoderCode).replace("$$inputcols$$",paramsStr)
-      lines = lines.replace("$$outputdict$$",outDictCode).replace("$$modelclassparameters$$",modelParameters)
-
-      modelCode += udf.classCode
+      lines = self.templates[udf.modelType.name + "_code"]
+      for key, value in udf.templace_replacement_dict.items():
+        lines = lines.replace(key, str(value))
 
     else:
       lines = udf.lines[1:]
@@ -275,11 +251,10 @@ class SQLGenerator:
       lines = "".join(lines)
 
     template = self.templates["createfunction"]
-    
-    code = template.replace("$$name$$", udf.name).replace("$$inparams$$",paramsStr).replace("$$returntype$$",returnType).replace("$$code$$",lines)
-
-    if modelCode != "":
-      code = code.replace("$$modelclassname$$",udf.modelClassName).replace("$$modelclassdef$$",modelCode)
+    code = template.replace("$$name$$", udf.name)\
+      .replace("$$inparams$$",paramsStr)\
+      .replace("$$returntype$$",returnType)\
+      .replace("$$code$$",lines)
     return code
 
   def _generateCreateExtTable(self, tab: ExternalTable) -> List[str]:

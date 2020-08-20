@@ -1,7 +1,7 @@
 postgresql:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
 
-  applymodelfunction: |
+  TORCH_code: |
       import random
       import torch
 
@@ -37,11 +37,27 @@ postgresql:
         predictions.append(str(out))
 
       return "\n".join(predictions)
+  ONNX_code: |
+    import onnxruntime
+    import random
+    def apply$$inputs$$ -> $$returntype$$:
+      $$input_to_tensor_func$$
+
+      $$tensor_to_output_func$$
+
+      def apply_model($$input_names$$):
+        if not hasattr(random, "onnx_session"):
+            random.onnx_session = onnxruntime.InferenceSession("$$onnx_file_path$$")
+        inputs = $$input_to_tensor_func_name$$($$input_names$$)
+        ret = random.onnx_session.run(None, inputs)
+        return($$tensor_to_output_func_name$$(ret))
+      return apply_model($$input_names$$)
+    return apply($$input_names$$)
 
 vector:
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
   externaltable: CREATE EXTERNAL TABLE $$name$$ ($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$' $$format$$ $$options$$
-  tensorflow_code: |
+  TF_code: |
     import tensorflow.compat.v1 as tf
     import numpy as np
     from tensorflow.contrib import learn
@@ -97,7 +113,8 @@ vector:
             feed_dict[random.type_dict[i]] = x
           return random.sess.run(random.type_dict["output"], feed_dict)[0].item()
       return apply_model([a.lower(), None])
-  onnx_code: |
+    return apply(a)
+  ONNX_code: |
     import onnxruntime
     import random
     def apply$$inputs$$ -> $$returntype$$:
@@ -112,3 +129,4 @@ vector:
         ret = random.onnx_session.run(None, inputs)
         return($$tensor_to_output_func_name$$(ret))
       return apply_model($$input_names$$)
+    return apply($$input_names$$)

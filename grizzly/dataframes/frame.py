@@ -1,7 +1,7 @@
 from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, FuncCall, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
-from grizzly.expression import ModelUDF,UDF, Param
+from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
 import inspect
 
@@ -107,14 +107,14 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
-  def predict(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: list, n_predictions: int = 1, *helperFuncs):
+  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: list, n_predictions: int = 1, *helperFuncs):
 
     if not isinstance(self, Projection):
       ValueError("classification can only be applied to a projection")
+    if len(outputDict) <= 0:
+      raise ValueError("output dict must not be empty")
 
-    (clazzCodeLst,_) = inspect.getsourcelines(clazz)
-
-    clazzCode = "".join(clazzCodeLst)
+    sqlGenerator = GrizzlyGenerator._backend.queryGenerator
 
     modelPathHash = abs(hash(path))
     funcName = f"grizzly_predict_{modelPathHash}"
@@ -126,26 +126,60 @@ class DataFrame(object):
       raise ValueError("toTensor converter must have exactly one parameter")
 
     toTensorInputType = sig.parameters[list(sig.parameters)[0]].annotation.__name__
+    params = [Param("invalue", toTensorInputType), Param("n_predictions", "int")]
+    paramsStr = ",".join([f"{p.name} {sqlGenerator._mapTypes(p.type)}" for p in params])
 
-    if len(outputDict) <= 0:
-      raise ValueError("output dict must not be empty")
-    #predictedType = type(outputDict[0]).__name__
-    predictedType = "str" # hard coded string because we collect n predictions in a list of strings
+    # predictedType = type(outputDict[0]).__name__
+    predictedType = "str"  # hard coded string because we collect n predictions in a list of strings
 
-    udf = ModelUDF(funcName,[Param("invalue", toTensorInputType), Param("n_predictions", "int")], predictedType, path, modelPathHash, toTensorFunc, outputDict, list(helperFuncs),clazz.__name__, clazzCode, clazzParameters)
+    helpers = list(helperFuncs)
+    helperCode = "\n"
+    for helperFunc in helpers:
+      (funcLines, _) = inspect.getsourcelines(helperFunc)
+      funcLines = sqlGenerator._unindent(funcLines)
+      helperCode += "".join(funcLines)
+
+    (encoderCode, _) = inspect.getsourcelines(toTensorFunc)
+    encoderCode = sqlGenerator._unindent(encoderCode)
+    encoderCode = "".join(encoderCode)
+
+    converter = lambda x: f"\"{x}\"" if type(x) == str else f"{x}"
+    outDictCode = "[" + ",".join(map(converter, outputDict)) + "]"
+
+    modelParameters = ",".join(map(converter, clazzParameters)) if clazzParameters else ""
+
+    (clazzCodeLst, _) = inspect.getsourcelines(clazz)
+    clazzCode = "".join(clazzCodeLst)
+
+    template_replacement_dict = {}
+    template_replacement_dict["$$modelpathhash$$"] = modelPathHash
+    template_replacement_dict["$$modelpath$$"] = path
+    template_replacement_dict["$$encoderfuncname$$"] = toTensorFunc.__name__
+    template_replacement_dict["$$helpers$$"] = helperCode
+    template_replacement_dict["$$encoder$$"] = encoderCode
+    template_replacement_dict["$$inputcols$$"] = paramsStr
+    template_replacement_dict["$$outputdict$$"] = outDictCode
+    template_replacement_dict["$$modelclassparameters$$"] = modelParameters
+    template_replacement_dict["$$modelclassname$$"] = clazz.__name__
+    template_replacement_dict["$$modelclassdef$$"] = clazzCode
+    udf = ModelUDF(funcName, params, predictedType, ModelType.TORCH, template_replacement_dict)
     call = FuncCall(funcName, self.attrs + [n_predictions] , self,udf, f"predicted_{attrsString}")
 
     return self.project([call])
 
   def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
+    funcName = "apply"
+    attrsString = "_".join([r.column for r in self.attrs])
     in_sig = inspect.signature(input_to_tensor)
     input_names = list(in_sig.parameters.keys())
     input_names_str = ','.join(input_names)
     (lines1, _) = inspect.getsourcelines(input_to_tensor)
+    params = []
     for param in in_sig.parameters:
       type = in_sig.parameters[param].annotation.__name__
       if (type == "_empty"):
         raise ValueError("Input converter function must specify parameter types")
+      params.append(Param(param, type))
 
     out_sig = inspect.signature(tensor_to_output)
     (lines2, _) = inspect.getsourcelines(tensor_to_output)
@@ -153,31 +187,39 @@ class DataFrame(object):
     if (returntype == "_empty"):
       raise ValueError("Output converter function must specify the return type")
 
-    code = GrizzlyGenerator._backend.queryGenerator.templates["onnx_code"] \
-      .replace("$$inputs$$", str(in_sig)) \
-      .replace("$$returntype$$", returntype)\
-      .replace("$$input_to_tensor_func$$", "".join(lines1))\
-      .replace("$$tensor_to_output_func$$", "".join(lines2)) \
-      .replace("$$input_names$$", input_names_str) \
-      .replace("$$onnx_file_path$$", onnx_path)\
-      .replace("$$input_to_tensor_func_name$$", input_to_tensor.__name__)\
-      .replace("$$tensor_to_output_func_name$$", tensor_to_output.__name__)
-    exec(code)
-    split = [e + "\n" for e in code.split("\n") if e]
-    split.append(f"return apply({input_names_str})\n")
-    return self._map(locals()['apply'], split)
+    template_replacement_dict = {}
+    template_replacement_dict["$$inputs$$"] = str(in_sig)
+    template_replacement_dict["$$returntype$$"] = returntype
+    template_replacement_dict["$$input_to_tensor_func$$"] = "".join(lines1)
+    template_replacement_dict["$$tensor_to_output_func$$"] = "".join(lines2)
+    template_replacement_dict["$$input_names$$"] = input_names_str
+    template_replacement_dict["$$onnx_file_path$$"] = onnx_path
+    template_replacement_dict["$$input_to_tensor_func_name$$"] = input_to_tensor.__name__
+    template_replacement_dict["$$tensor_to_output_func_name$$"] = tensor_to_output.__name__
+
+    udf = ModelUDF(funcName, params, returntype, ModelType.ONNX, template_replacement_dict)
+    call = FuncCall(funcName, self.attrs, self, udf, f"predicted_{attrsString}")
+
+    return self.project([call])
 
   def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
-    code = GrizzlyGenerator._backend.queryGenerator.templates["tensorflow_code"]
-    code = code.replace("$$tf_checkpoint_file$$", tf_checkpoint_file)\
-      .replace("$$vocab_file$$", vocab_file)\
-      .replace("$$network_input_names$$", f"""[{', '.join('"%s"' % n for n in network_input_names)}]""")\
-      .replace("$$constants$$", f"[{','.join(str(item) for item in constants)}]")
-    exec(code)
-    #Split lines but keep line breaks included
-    split = [e+"\n" for e in code.split("\n") if e]
-    split.append("return apply(a)\n")
-    return self._map(locals()['apply'], split)
+    funcName = "apply"
+    attrsString = "_".join([r.column for r in self.attrs])
+
+    # TODO: make this generic
+    params = [Param("a", "str")]
+    returntype = "int"
+
+    template_replacement_dict = {}
+    template_replacement_dict["$$tf_checkpoint_file$$"] = tf_checkpoint_file
+    template_replacement_dict["$$vocab_file$$"] = vocab_file
+    template_replacement_dict["$$network_input_names$$"] = f"""[{', '.join('"%s"' % n for n in network_input_names)}]"""
+    template_replacement_dict["$$constants$$"] = f"[{','.join(str(item) for item in constants)}]"
+
+    udf = ModelUDF(funcName, params, returntype, ModelType.TF, template_replacement_dict)
+    call = FuncCall(funcName, self.attrs, self, udf, f"predicted_{attrsString}")
+
+    return self.project([call])
 
   def map(self, func):
     return self._map(func)
