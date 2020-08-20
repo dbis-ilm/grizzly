@@ -405,7 +405,7 @@ class DataFrameTest(CodeMatcher):
 
     actual = df.generateQuery()
 
-    expected = """create or replace function myfunc(a int) returns varchar(255) language plpython3u as 'return a+"_grizzly"';select *, myfunc($t0.globaleventid) as newid from events $t0 where $t0.globaleventid = 467268277"""
+    expected = """create or replace function myfunc(a int) returns varchar(255) language plpython3u as 'return a+"_grizzly"' parallel safe;select *, myfunc($t0.globaleventid) as newid from events $t0 where $t0.globaleventid = 467268277"""
 
     GrizzlyGenerator._backend = oldGen
 
@@ -445,7 +445,7 @@ class DataFrameTest(CodeMatcher):
         return []
 
     df = grizzly.read_table("events") 
-    df["blubb"] = df[df.n_nation].apply_torch_model("/tmp/mymodel.pt", stringToTensor, 1, isEmptyString)
+    df["blubb"] = df[df.n_nation].apply_torch_model("/tmp/mymodel.pt", stringToTensor, clazzParameters=[],outputDict=["hallo"])
 
     actual = df.generateQuery()
     print(actual)
