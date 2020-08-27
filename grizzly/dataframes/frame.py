@@ -79,10 +79,10 @@ class DataFrame(object):
 
     return Join(self, other, on, how, comp)
 
-  def groupby(self, groupCols):
+  def groupby(self, groupCols, aggrFunc = None):
     if not isinstance(groupCols, list):
       groupCols = [groupCols]
-    return Grouping(groupCols, self)
+    return Grouping(groupCols, self, aggrFunc)
 
   
 
@@ -474,7 +474,7 @@ class Filter(DataFrame):
 
 class Grouping(DataFrame):
 
-  def __init__(self, groupCols, parent):
+  def __init__(self, groupCols, parent, aggrFunc):
     self.groupCols = []
     computedAliases = [c.alias for c in parent.computedCols]
     for theCol in groupCols:
@@ -490,7 +490,7 @@ class Grouping(DataFrame):
         theCol.df = self
         self.groupCols.append(theCol)
     
-    self.aggFunc = None
+    self.aggFunc = aggrFunc
 
     super().__init__(self.groupCols, parent, GrizzlyGenerator._incrAndGetTupleVar())
 

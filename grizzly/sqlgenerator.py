@@ -139,8 +139,10 @@ class Query:
 
         funcCode = ""
         if df.aggFunc:
-          (func, col) = df.aggFunc
-          funcCode = ", " + SQLGenerator._getFuncCode(df, col, func)
+          # Quick and dirty fix to make aggrs work for the cidr paper
+          funcCode = "," + df.aggFunc
+          #(func, col) = df.aggFunc
+          #funcCode = ", " + SQLGenerator._getFuncCode(df, col, func)
         
         groupSQL = f"SELECT {groupcols} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {groupcols}"
 
