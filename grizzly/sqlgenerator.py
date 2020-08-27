@@ -109,12 +109,14 @@ class Query:
         rQry = Query(self.generator)
         (rpre,rparentSQL) = rQry._buildFrom(df.right)
 
-        lAlias = GrizzlyGenerator._incrAndGetTupleVar()
-        rAlias = GrizzlyGenerator._incrAndGetTupleVar()
-
         if isinstance(df.on, Expr):
+          # use the alias from the already built join condition
+          lAlias = df.on.left.df.alias
+          rAlias = df.on.right.df.alias
           onSQL = "ON " + self._exprToSQL(df.on)
         elif isinstance(df.on, list):
+          lAlias = GrizzlyGenerator._incrAndGetTupleVar()
+          rAlias = GrizzlyGenerator._incrAndGetTupleVar()
           onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
         else:
           onSQL = ""
