@@ -79,10 +79,10 @@ class DataFrame(object):
 
     return Join(self, other, on, how, comp)
 
-  def groupby(self, groupCols, aggrFunc = None):
+  def groupby(self, groupCols,):
     if not isinstance(groupCols, list):
       groupCols = [groupCols]
-    return Grouping(groupCols, self, aggrFunc)
+    return Grouping(groupCols, self)
 
   
 
@@ -376,37 +376,43 @@ class DataFrame(object):
 
   ###################################
   # aggregation functions
-  
+
+  def _exec_or_add_aggr(self, col, aggFunc):
+    """
+    Adaption to the nested query generation. If there is a grouping in the
+    operator tree, the aggregation becomes a transformation. However, it must not
+    become a new nested query, but needs to be attached to the grouping.
+    If there is no grouping, the aggregation is an action, so execute the query.
+    """
+    if isinstance(self, Grouping) and self.aggFunc == None:
+      self.aggFunc = (aggFunc, col)
+      return self
+
+    return GrizzlyGenerator.aggregate(self, col, aggFunc)
+
   def min(self, col=None):
     # return self._execAgg("min",col)
-    return GrizzlyGenerator.aggregate(self, col, AggregateType.MIN)
+    return self._exec_or_add_aggr(col, AggregateType.MIN)
 
   def max(self, col=None):
     # return self._execAgg("max",col)
-    return GrizzlyGenerator.aggregate(self, col, AggregateType.MAX)
+    return self._exec_or_add_aggr(col, AggregateType.MAX)
 
   def mean(self, col=None):
     # return self._execAgg('avg',col)
-    return GrizzlyGenerator.aggregate(self, col, AggregateType.MEAN)
+    return self._exec_or_add_aggr(col, AggregateType.MEAN)
 
   def count(self, col=None):
     colName = "*"
     if col is not None:
       colName = col
     
-    return GrizzlyGenerator.aggregate(self, colName, AggregateType.COUNT)
-
-  def _gen_count(self, col=None):
-    colName = "*"
-    if col is not None:
-      colName = col
-    
-    return GrizzlyGenerator._gen_aggregate(self, colName, AggregateType.COUNT)
-
+    return self._exec_or_add_aggr(colName, AggregateType.COUNT)
 
   def sum(self , col):
     return GrizzlyGenerator.aggregate(self, col, AggregateType.SUM)
     # return self._execAgg("sum", col)
+
 
   ###################################
   # show functions
@@ -474,7 +480,7 @@ class Filter(DataFrame):
 
 class Grouping(DataFrame):
 
-  def __init__(self, groupCols, parent, aggrFunc):
+  def __init__(self, groupCols, parent):
     self.groupCols = []
     computedAliases = [c.alias for c in parent.computedCols]
     for theCol in groupCols:
@@ -490,7 +496,7 @@ class Grouping(DataFrame):
         theCol.df = self
         self.groupCols.append(theCol)
     
-    self.aggFunc = aggrFunc
+    self.aggFunc = None
 
     super().__init__(self.groupCols, parent, GrizzlyGenerator._incrAndGetTupleVar())
 
