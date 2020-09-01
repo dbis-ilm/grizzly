@@ -500,7 +500,7 @@ class Grouping(DataFrame):
 
 class Join(DataFrame):
   def __init__(self, parent, other, on, how, comp):
-    super().__init__(parent.columns.extend(other.columns), parent, GrizzlyGenerator._incrAndGetTupleVar())
+    super().__init__(parent.columns + other.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
     self.right = other
     self.on = on
     self.how = how
