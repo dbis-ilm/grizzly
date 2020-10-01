@@ -1,39 +1,73 @@
 import grizzly
 import sqlite3
 from grizzly.relationaldbexecutor import RelationalExecutor
+from grizzly.wrapper import wrapper
+from grizzly.aggregates import AggregateType
 
-con = sqlite3.connect("grizzly.db")
 
+con=wrapper.wrap(["./sample.xlsx","./sample.csv","./grizzly.db"])
 grizzly.use(RelationalExecutor(con))
 
-df = grizzly.read_table("events")
+print("----------------show Excel Data sheet1------------------------")
+dfexcel = grizzly.read_table("sheet1")
+dfexcel.show(pretty=True)
 
-df[df["globaleventid"] == 470747760] # filter
-df = df[["actor1name","actor2name"]]
+print("----------------Aggregate function on excel------------------------")
+g= dfexcel.groupby(["Country","Product"])
+a = g.agg(col="Product",aggType=AggregateType.COUNT)
 
-df.show(pretty=True)
+print(a.generate())
+a.show(pretty=True)
 
-print("----------------------------------------")
+print("---------------show Excel Data sheet2-------------------------")
+dfexcel2 = grizzly.read_table("sheet2")
+dfexcel2.show(pretty=True)
 
-df1 = grizzly.read_table("t1")
-df2 = grizzly.read_table("t2")
-
-j  = df1.join(df2, on = (df1.actor1name == df2.actor2name) | (df1["actor1countrycode"] <= df2["actor2countrycode"]), how="left outer")
+print("---------------join between two excel sheet-------------------------")
+j= dfexcel.join(dfexcel2, on=(dfexcel.Segment == dfexcel2.Segment), how='inner')
 print(j.generate())
-cnt = j.count()
-print(f"join result contais {cnt} elments")
+j.show(pretty=True)
 
-print("----------------------------------------")
+print("---------------Show csv data-------------------------")
+dfcsv = grizzly.read_table("sample")
+dfcsv.show(pretty=True)
 
-df = grizzly.read_table("events")
+print("---------------Aggregate SUM on CSV File-------------------------")
+g2= dfcsv.groupby(["Segment"])
+a2 = g2.agg(col="MonthNumber",aggType=AggregateType.SUM)
 
-print(df.count("actor2name"))
+print(a2.generate())
+a2.show(pretty=True)
 
-print("----------------------------------------")
+print("---------------Join between Excel and csv-------------------------")
+j2= dfexcel.join(dfcsv, on=(dfexcel.Segment == dfcsv.Segment), how="inner")
 
-from grizzly.aggregates import AggregateType
-df = grizzly.read_table("events")
-g = df.groupby(["year","actor1name"])
+print(j2.generate())
+j2.show(pretty=True)
 
-a = g.agg(col="actor2name", aggType=AggregateType.COUNT)
-a.show()
+print("---------------Show DB data-------------------------")
+
+dfdb = grizzly.read_table("grizzly.sample")
+dfdb.show(pretty=True)
+
+print("---------------Join Between two different tables t2 and t1-------------------------")
+dfdb1 = grizzly.read_table("grizzly.t1")
+dfdb2 = grizzly.read_table("grizzly.t2")
+
+j3= dfdb1.join(dfdb2, on=(dfdb1.actor1name == dfdb2.actor2name), how="inner")
+print(j3.generate())
+j3.show(pretty=True)
+
+
+print("---------------Join Between db and csv-------------------------")
+j3= dfdb.join(dfcsv, on=(dfdb.Segment == dfcsv.Segment), how="left outer")
+
+print(j3.generate())
+j3.show(pretty=True)
+
+print("--------------Join between db and Excel--------------------------")
+j4= dfdb.join(dfexcel, on=(dfdb.Segment == dfexcel.Segment), how="inner")
+
+print(j4.generate())
+j4.show(pretty=True)
+
