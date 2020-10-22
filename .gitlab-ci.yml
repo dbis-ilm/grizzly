@@ -21,7 +21,7 @@ cache:
 before_script:
   - python -V  # Print out python version for debugging
   #- pip install virtualenv
-  - pip install psycopg2 pytest-coverage beautifultable
+  - pip install psycopg2 pytest-coverage beautifultable pyyaml
   #- virtualenv venv
   #- source venv/bin/activate
 
