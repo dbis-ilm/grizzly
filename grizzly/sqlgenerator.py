@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import FuncCall, ColRef, Expr, ModelType
+from grizzly.expression import FuncCall, ColRef, Expr, ModelType, Or, And
 from typing import List
 from grizzly.generator import GrizzlyGenerator
 
@@ -49,7 +49,7 @@ class Query:
 
     return f"{leftExpr} {expr.opStr} {rightExpr}"
 
-  def _buildFrom(self,df) -> (List[str], str):
+  def _buildFrom(self,df) -> (List[str], str, str):
 
     if df is not None:
 
@@ -87,7 +87,7 @@ class Query:
         if computedCols:
           prefixed += ","+computedCols
         
-        return (preCode + pre, f"SELECT {'DISTINCT' if df.doDistinct else ''} {prefixed} FROM ({parentSQL}) {df.alias}")
+        return (preCode + pre, f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}")
 
       elif isinstance(df,Filter):
         subQry = Query(self.generator)
@@ -104,12 +104,16 @@ class Query:
       elif isinstance(df, Join):
 
         lQry = Query(self.generator)
-        (lpre,lparentSQL) = lQry._buildFrom(df.parents[0])
+        (lpre,lparentSQL) = lQry._buildFrom(df.leftParent())
 
         rQry = Query(self.generator)
-        (rpre,rparentSQL) = rQry._buildFrom(df.right)
+        (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
 
-        if isinstance(df.on, Expr):
+        if isinstance(df.on, Or) or isinstance(df.on, And):
+          lAlias = df.leftParent().alias
+          rAlias = df.rightParent().alias
+          onSQL = "ON " + self._exprToSQL(df.on)
+        elif isinstance(df.on, Expr):
           # use the alias from the already built join condition
           lAlias = df.on.left.df.alias
           rAlias = df.on.right.df.alias
@@ -119,6 +123,8 @@ class Query:
           rAlias = GrizzlyGenerator._incrAndGetTupleVar()
           onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
         else:
+          lAlias = df.leftParent().alias
+          rAlias = df.rightParent().alias
           onSQL = ""
 
         # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
@@ -195,6 +201,7 @@ class SQLGenerator:
   def __init__(self, profile: str = None):
     self.profile = profile
     self.templates = Config.loadProfile(profile)
+    self.cnt = 0
   
   @staticmethod
   def _unindent(lines: list) -> list:
@@ -293,7 +300,7 @@ class SQLGenerator:
       # aggSQL = innerSQL
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      aggSQL = f"SELECT {funcCode} FROM {df.tab} {df.alias}"
+      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
 
     return (pre, aggSQL)
 

@@ -121,7 +121,7 @@ class DataFrame(object):
       return self.project([call])
 
     elif isinstance(func, DataFrame):
-      return self.join(func,None, how = "natural")
+      return self.join(func, on = None, how = "natural")
     else:
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
@@ -246,7 +246,7 @@ class DataFrame(object):
   # shortcuts
 
   def __getattr__(self, name):
-    return self.project([ColRef(name, self)])
+    return Projection([ColRef(name, self)],self, alias = self.alias)
 
   # magic function for write access by index: []
   def __setitem__(self, key, value):
@@ -269,7 +269,7 @@ class DataFrame(object):
       return self.filter(key)
     elif theType is str:
       # print(f"projection col: {key}")
-      return self.project([ColRef(key, self)])
+      return Projection([ColRef(key, self)],self, alias = self.alias)
     elif theType is Projection:
       return self.project([key.attrs[0]])
     elif theType is list:
@@ -386,7 +386,7 @@ class DataFrame(object):
     """
     if isinstance(self, Grouping) and self.aggFunc == None:
       self.aggFunc = (aggFunc, col)
-      return self
+      # return self
 
     return GrizzlyGenerator.aggregate(self, col, aggFunc)
 
@@ -456,7 +456,7 @@ class ExternalTable(DataFrame):
 
 class Projection(DataFrame):
 
-  def __init__(self, attrs, parent, doDistinct = False):
+  def __init__(self, attrs, parent, doDistinct = False,alias=None):
     if attrs:
       self.attrs = [self.updateRef(x) for x in attrs] if not isinstance(attrs,str) else [ColRef(attrs, self)]
     else:
@@ -469,7 +469,9 @@ class Projection(DataFrame):
     #   self.attrs = attrs
 
     self.doDistinct = doDistinct
-    super().__init__(self.attrs, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    if not alias:
+      alias = GrizzlyGenerator._incrAndGetTupleVar()
+    super().__init__(self.attrs, parent,alias)
 
 class Filter(DataFrame):
 
@@ -506,8 +508,15 @@ class Grouping(DataFrame):
 
 class Join(DataFrame):
   def __init__(self, parent, other, on, how, comp):
-    super().__init__(parent.columns + other.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    t = GrizzlyGenerator._incrAndGetTupleVar()
+    super().__init__(parent.columns + other.columns, parent, t)
     self.right = other
     self.on = on
     self.how = how
     self.comp = comp
+
+  def leftParent(self):
+    return self.parents[0]
+
+  def rightParent(self):
+    return self.right
