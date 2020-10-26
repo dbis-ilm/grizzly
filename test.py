@@ -148,7 +148,7 @@ class DataFrameTest(CodeMatcher):
 
   def test_groupByComputedCol(self):
     from grizzly.generator import GrizzlyGenerator
-    oldGen = GrizzlyGenerator._backend
+    oldGen = GrizzlyGenerator._backend.queryGenerator
 
     newGen = SQLGenerator("postgresql")
     GrizzlyGenerator._backend.queryGenerator = newGen
@@ -167,10 +167,12 @@ class DataFrameTest(CodeMatcher):
 
     expected = f"""create or replace function mymod(s varchar(255)) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
 
+    GrizzlyGenerator._backend.queryGenerator = oldGen
+
     self.matchSnipped(actual, expected)
 
 
-    GrizzlyGenerator._backend.queryGenerator = oldGen
+    
 
   def test_groupByWithAggTwice(self):
     df = grizzly.read_table("events") 
@@ -402,7 +404,7 @@ class DataFrameTest(CodeMatcher):
 
   def test_udf(self):
     from grizzly.generator import GrizzlyGenerator
-    oldGen = GrizzlyGenerator._backend
+    oldGen = GrizzlyGenerator._backend.queryGenerator
 
     newGen = SQLGenerator("postgresql")
     GrizzlyGenerator._backend.queryGenerator = newGen
@@ -425,7 +427,7 @@ class DataFrameTest(CodeMatcher):
 
     expected = f"""create or replace function myfunc(a int) returns varchar(255) language plpython3u as 'return a+"_grizzly"' parallel safe;{sql}"""
 
-    GrizzlyGenerator._backend = oldGen
+    GrizzlyGenerator._backend.queryGenerator = oldGen
 
     self.matchSnipped(actual, expected, removeLinebreaks=True)
 
@@ -449,7 +451,7 @@ class DataFrameTest(CodeMatcher):
   # def test_predictPytorch(self):
 
   #   from grizzly.generator import GrizzlyGenerator
-  #   oldGen = GrizzlyGenerator._backend
+  #   oldGen = GrizzlyGenerator._backend.queryGenerator
 
   #   newGen = SQLGenerator("postgresql")
   #   GrizzlyGenerator._backend.queryGenerator = newGen
@@ -469,7 +471,7 @@ class DataFrameTest(CodeMatcher):
   #   actual = df.generateQuery()
   #   print(actual)
 
-  #   GrizzlyGenerator._backend = oldGen
+  #   GrizzlyGenerator._backend.queryGenerator = oldGen
 
   def test_externaltable(self):
     df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
