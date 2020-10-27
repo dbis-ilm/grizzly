@@ -1,5 +1,6 @@
 import unittest
 import sqlite3
+# import monetdbe
 
 import re
 
@@ -53,22 +54,21 @@ class CodeMatcher(unittest.TestCase):
 
 class DataFrameTest(CodeMatcher):
 
-  @classmethod
-  def setUpClass(cls):
+  def setUp(self):
+    # c = monetdbe.connect("grizzly.mdbe")
     c = sqlite3.connect("grizzly.db")
     grizzly.use(RelationalExecutor(c, SQLGenerator("vector")))
 
-  @classmethod
-  def tearDownClass(cls):
+  def tearDown(self):
     grizzly.close()
 
   def test_groupby(self):
     df = grizzly.read_table("events")
-    g = df.groupby(["year","actor1name"])
+    g = df.groupby(["theyear","actor1name"])
     a = g.agg(col="actor2name", aggType=AggregateType.MEAN)
     
-    # expected = "select $t0.year, $t0.actor1name, avg($t0.actor2name) from events $t0 group by $t0.year, $t0.actor1name"
-    expected = "select $t1.year, $t1.actor1name, avg($t1.actor2name) from (select * from events $t0) $t1 group by $t1.year, $t1.actor1name"
+    # expected = "select $t0.theyear, $t0.actor1name, avg($t0.actor2name) from events $t0 group by $t0.theyear, $t0.actor1name"
+    expected = "select $t1.theyear, $t1.actor1name, avg($t1.actor2name) from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name"
     actual = a.generateQuery()
 
     self.matchSnipped(actual, expected)
@@ -78,18 +78,11 @@ class DataFrameTest(CodeMatcher):
     df = df["a"]
     df = df[df["a"] == 2]
 
-    # df2 = grizzly.read_table("events")
-    # df3 = df.join(df2,on=["a","a"])
     actual = df.generateQuery()
     expected = "select * from (select $t1.a from (select * from events $t0) $t1) $t2 where $t2.a = 2"
 
-
     self.matchSnipped(actual, expected)
 
-    # actualDF3 = df3.generateQuery()
-    # expectedDF3 = "select $t0.a from events $t0 inner join (select * from events $t1) $t2 on $t0.a = $t2.a where $t0.a = 2"
-
-    # self.matchSnipped(actualDF3, expectedDF3)
 
   def test_selectStar(self):
     df = grizzly.read_table("events") 
@@ -99,7 +92,8 @@ class DataFrameTest(CodeMatcher):
 
   def test_selectCountStar(self):
     df = grizzly.read_table("events")
-    self.assertEqual(df.count(), 30354)
+    actual = df.count()
+    self.assertEqual(actual, 30354)
 
 
   def test_selectStarFilter(self):
@@ -139,10 +133,10 @@ class DataFrameTest(CodeMatcher):
   def test_selectStarGroupBy(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == '468189636']
-    g = df.groupby(["year","monthyear"])
+    g = df.groupby(["theyear","monthyear"])
 
     actual = g.generateQuery()
-    expected = "select $t2.year, $t2.monthyear from (select * from (select * from events $t0) $t1 where $t1.globaleventid = '468189636') $t2 group by $t2.year, $t2.monthyear"
+    expected = "select $t2.theyear, $t2.monthyear from (select * from (select * from events $t0) $t1 where $t1.globaleventid = '468189636') $t2 group by $t2.theyear, $t2.monthyear"
 
     self.matchSnipped(actual, expected)
 
@@ -177,19 +171,19 @@ class DataFrameTest(CodeMatcher):
   def test_groupByWithAggTwice(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 476829606]
-    g = df.groupby(["year","monthyear"])
+    g = df.groupby(["theyear","monthyear"])
 
     agged = g.agg(col="actor2geo_type", aggType=AggregateType.COUNT)
     
     aggActual = agged.generateQuery()
-    aggExpected = "select $t2.year, $t2.monthyear, count($t2.actor2geo_type) from (select * from (select * from events $t0) $t1 where $t1.globaleventid = 476829606) $t2 group by $t2.year, $t2.monthyear"
+    aggExpected = "select $t2.theyear, $t2.monthyear, count($t2.actor2geo_type) from (select * from (select * from events $t0) $t1 where $t1.globaleventid = 476829606) $t2 group by $t2.theyear, $t2.monthyear"
 
     self.matchSnipped(aggActual, aggExpected)
 
   def test_groupByTableAgg(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 476829606]
-    g = df.groupby(["year","monthyear"])
+    g = df.groupby(["theyear","monthyear"])
 
     a = g.count("monthyear")
     # print(f"cnt: {a}")
@@ -197,7 +191,7 @@ class DataFrameTest(CodeMatcher):
 
   def test_groupByTableAggStar(self):
     df = grizzly.read_table("events") 
-    g = df.groupby("year")
+    g = df.groupby("theyear")
 
     a = g.count()
     # print(f"cnt: {a}")
@@ -247,7 +241,6 @@ class DataFrameTest(CodeMatcher):
     # expected = "select $t1.m, $t2.x, $t4.b, $t4.d from t1 $t1 left outer join t2 $t2 on $t1.a = $t2.b and $t1.c <= $t2.d inner join (select $t3.b, $t3.d from t3 $t3) $t4 on $t1.m = $t4.b and $t1.x <= $t4.d"
     expected = "select * from (select $t2.m, $t2.x from (select * from (select * from t1 $t0) $t0 left outer join (select * from t2 $t1) $t1 on $t0.a = $t1.b and $t0.c <= $t1.d) $t2) $t2 inner join (select $t6.b, $t6.d from (select * from t3 $t4) $t6) $t6 on $t3.m = $t6.b and $t3.x <= $t6.d"
     self.matchSnipped(actual, expected)
-
 
   def test_DistinctAll(self):
     df = grizzly.read_table("events")
