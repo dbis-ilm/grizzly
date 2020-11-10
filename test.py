@@ -1,6 +1,5 @@
 import unittest
 import sqlite3
-# import monetdbe
 
 import re
 
@@ -55,7 +54,6 @@ class CodeMatcher(unittest.TestCase):
 class DataFrameTest(CodeMatcher):
 
   def setUp(self):
-    # c = monetdbe.connect("grizzly.mdbe")
     c = sqlite3.connect("grizzly.db")
     grizzly.use(RelationalExecutor(c, SQLGenerator("vector")))
 
@@ -159,7 +157,7 @@ class DataFrameTest(CodeMatcher):
     
     sql = "select computed, count(*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
 
-    expected = f"""create or replace function mymod(s varchar(255)) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
+    expected = f"""create or replace function mymod(s varchar(1024)) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
 
     GrizzlyGenerator._backend.queryGenerator = oldGen
 
@@ -418,7 +416,7 @@ class DataFrameTest(CodeMatcher):
 
     actual = df.generateQuery()
 
-    expected = f"""create or replace function myfunc(a int) returns varchar(255) language plpython3u as 'return a+"_grizzly"' parallel safe;{sql}"""
+    expected = f"""create or replace function myfunc(a int) returns varchar(1024) language plpython3u as 'return a+"_grizzly"' parallel safe;{sql}"""
 
     GrizzlyGenerator._backend.queryGenerator = oldGen
 

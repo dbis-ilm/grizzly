@@ -59,15 +59,19 @@ class RelationalExecutor(object):
   def toString(self, df, delim=",", pretty=False, maxColWidth=20, limit=20):
     rs = self.execute(df)
 
-    cols = [dec[0] for dec in rs.description]
+    if rs.description:
+      cols = [dec[0] for dec in rs.description]
+    else:
+      cols = []
 
     if not pretty:
       strings = [delim.join(cols)]
       cnt = 0
       for row in rs:
-        if limit is None or cnt < limit:
-          strings.append(delim.join([str(col) for col in row]))
         cnt += 1
+        if limit is None or cnt <= limit:
+          strings.append(delim.join([str(col) for col in row]))
+        
 
       rs.close()
 
@@ -95,12 +99,11 @@ class RelationalExecutor(object):
         return rowFormat.format(*values)
 
       resultRep = [formatRow(cols), formatRow(firstRow)]
-      cnt = 0
+      cnt = 1 # we already fetched and processed the first row
       for row in rs:
-        if  limit is None or cnt < limit:
-          resultRep.append(formatRow(row))
-
         cnt += 1
+        if  limit is None or cnt <= limit:
+          resultRep.append(formatRow(row))
 
       rs.close()
 
@@ -121,7 +124,9 @@ class RelationalExecutor(object):
 
     (pre,sql) = self.queryGenerator.generate(df)
     for pq in pre:
+      # print(pq)
       self._execute(pq).close()
+    # print(sql)
     return self._execute(sql)
 
   def _execAgg(self, df, col, func):

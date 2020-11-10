@@ -217,7 +217,7 @@ class SQLGenerator:
   @staticmethod
   def _mapTypes(pythonType: str) -> str:
     if pythonType == "str":
-      return "varchar(255)"
+      return "varchar(1024)"
     # elif pythonType == "long":
     #   return "bigint"
     else: 
