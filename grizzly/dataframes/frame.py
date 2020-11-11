@@ -1,4 +1,4 @@
-from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, And, Or, Expr, ColRef, FuncCall, ExpressionException
+from grizzly.expression import Eq, Ne, Ge, Gt, Le, Lt, Expr, ColRef, FuncCall, ExpressionException
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
@@ -92,6 +92,12 @@ class DataFrame(object):
       raise ValueError(f"LIMIT must not be negative (got {n})")
 
     return Limit(n, offset, self)
+
+  def sort_values(self, by, ascending:bool=True):
+    if not isinstance(by, list):
+      by = [by]
+
+    return Ordering(by,ascending, self)
 
   def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
@@ -494,7 +500,6 @@ class Filter(DataFrame):
   def __init__(self, expr: Expr, parent: DataFrame):
     super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
     self.expr = self.updateRef(expr)
- 
 
 class Grouping(DataFrame):
 
@@ -542,3 +547,17 @@ class Limit(DataFrame):
     super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
     self.limit = limit
     self.offset = offset
+
+class Ordering(DataFrame):
+  def __init__(self, by:list, ascending:bool, parent):
+    super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    
+    sortCols = []
+    for col in by:
+      if isinstance(col, Projection):
+        sortCols.append(self.updateRef(col.attrs[0]))
+      elif isinstance(col, str):
+        sortCols.append(ColRef(col, self))
+
+    self.by = sortCols
+    self.ascending = ascending

@@ -1,5 +1,5 @@
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import Limit, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
+from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import FuncCall, ColRef, Expr, ModelType, Or, And
 from grizzly.generator import GrizzlyGenerator
 
@@ -143,14 +143,14 @@ class Query:
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        groupcols = ",".join([str(attr) for attr in df.groupCols])
+        by = ",".join([str(attr) for attr in df.groupCols])
 
         funcCode = ""
         if df.aggFunc:
           (func, col) = df.aggFunc
           funcCode = ", " + SQLGenerator._getFuncCode(df, col, func)
         
-        groupSQL = f"SELECT {groupcols} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {groupcols}"
+        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {by}"
 
         if computedCols:
           tVar = GrizzlyGenerator._incrAndGetTupleVar()
@@ -172,11 +172,22 @@ class Query:
         else:
           raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
 
-        if df.offset >= 0:
+        if df.offset > 0:
           limitSQL += f" OFFSET {df.offset}"
 
 
         return (preCode+pre, limitSQL)
+      
+      elif isinstance(df, Ordering):
+        subQry = Query(self.generator)
+        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
+
+        by = ",".join([str(attr) for attr in df.by])
+        direction = "ASC" if df.ascending else "DESC"
+
+        qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
+
+        return (preCode+pre, qry)
 
       else:
         raise ValueError(f"unsupported operator {type(df)}")

@@ -476,6 +476,72 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_orderingdefault(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = "globaleventid")
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid asc"
+
+    self.matchSnipped(actual, expected)
+
+  def test_orderingDESC(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = "globaleventid", ascending=False)
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid desc"
+
+    self.matchSnipped(actual, expected)
+
+  def test_orderingMulti(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = ["globaleventid","actor1name"])
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid, $t2.actor1name asc"
+
+    self.matchSnipped(actual, expected)
+
+  def test_orderingMultiDESC(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = ["globaleventid","actor1name"],ascending=False)
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid, $t2.actor1name desc"
+
+    self.matchSnipped(actual, expected)
+
+  def test_orderingMultiSingleRef(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = df.globaleventid)
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid asc"
+
+    self.matchSnipped(actual, expected)
+
+  def test_orderingMultiRef(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = [df.globaleventid, df["actor1name"]])
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid, $t2.actor1name asc"
+
+    self.matchSnipped(actual, expected)
+
   # def test_predictPytorch(self):
 
   #   from grizzly.generator import GrizzlyGenerator
