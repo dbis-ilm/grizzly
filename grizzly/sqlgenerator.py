@@ -1,12 +1,11 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import FuncCall, ColRef, Expr, ModelType, Or, And
-from typing import List
 from grizzly.generator import GrizzlyGenerator
 
-import random
-import string
-import inspect
+from typing import List, Tuple
+from pathlib import Path
+import os
 
 class Query:
 
@@ -49,7 +48,7 @@ class Query:
 
     return f"{leftExpr} {expr.opStr} {rightExpr}"
 
-  def _buildFrom(self,df) -> (List[str], str, str):
+  def _buildFrom(self,df) -> Tuple[List[str], str, str]:
 
     if df is not None:
 
@@ -172,7 +171,33 @@ class Config:
     if not profile:
       return Config(profile, dict())
 
-    path = f"./grizzly.yml"
+    configDir = Path.home().joinpath(".config","grizzly")
+    locations = [Path.cwd(), configDir]
+
+    confFileName = "grizzly.yml"
+
+    path = None
+    for loc in locations:
+      p = loc.joinpath(confFileName)
+      if p.exists():
+        path = p
+        print(f"found config file in: {str(path)}")
+        break
+
+    if not path:
+      print(f"Cannot find config file {confFileName} in {[str(l) for l in locations]} - creating default in {str(configDir)}...",end="")
+      import pkg_resources
+      my_data = pkg_resources.resource_string(__name__, "grizzly.yml").decode("utf-8") 
+      
+      filename = configDir.joinpath(confFileName)
+      os.makedirs(os.path.dirname(filename), exist_ok=True)
+      with open(filename,'w') as target:
+        target.writelines(my_data)
+
+      print("done")
+      path = filename
+
+
     import yaml
     configs = None
     with open(path,"r") as configFile:
@@ -288,7 +313,7 @@ class SQLGenerator:
     funcCode = f"{funcStr}({colName})"
     return funcCode
 
-  def _generateAggCode(self, df, col, func) -> (List[str],str):
+  def _generateAggCode(self, df, col, func) -> Tuple[List[str],str]:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
@@ -306,7 +331,7 @@ class SQLGenerator:
 
     return (pre, aggSQL)
 
-  def generate(self, df) -> (List[str],str):
+  def generate(self, df) -> Tuple[List[str],str]:
     qry = Query(self)
     (preQueryCode, qryString) = qry._buildFrom(df)
 

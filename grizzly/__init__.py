@@ -1,6 +1,6 @@
-from grizzly.dataframes.frame import Table
-from grizzly.dataframes.frame import ExternalTable
-from grizzly.generator import GrizzlyGenerator
+from .dataframes.frame import Table
+from .dataframes.frame import ExternalTable
+from .generator import GrizzlyGenerator
 
 def use(backend):
   GrizzlyGenerator._backend = backend
