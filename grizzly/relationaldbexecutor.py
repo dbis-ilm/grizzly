@@ -57,7 +57,7 @@ class RelationalExecutor(object):
     import beautifultable
     table = beautifultable.BeautifulTable()
     for row in rs:
-      table.append_row(row)
+      table.rows.append(row)
 
     rs.close()
     return str(table)
