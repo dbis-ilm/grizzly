@@ -1,5 +1,5 @@
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
+from grizzly.dataframes.frame import Limit, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import FuncCall, ColRef, Expr, ModelType, Or, And
 from grizzly.generator import GrizzlyGenerator
 
@@ -159,7 +159,22 @@ class Query:
           groupSQL = f"SELECT {proj} FROM {groupSQL} {tVar}"
 
         return (preCode + pre, groupSQL)
-      
+
+      elif isinstance(df, Limit):
+        subQry = Query(self.generator)
+        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
+
+        limitClause = self.generator.templates["limit"].lower()
+        limitSQL = None
+        if limitClause == "top":
+          limitSQL = f"SELECT TOP {df.n} {df.alias}.* FROM ({parentSQL}) {df.alias}"
+        elif limitClause == "limit":
+          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {df.n}"
+        else:
+          raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
+
+        return (preCode+pre, limitSQL)
+
       else:
         raise ValueError(f"unsupported operator {type(df)}")
 

@@ -84,7 +84,11 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
-  
+  def limit(self, n: int):
+    if n < 0:
+      raise ValueError(f"LIMIT must not be negative (got {n})")
+
+    return Limit(n, self)
 
   def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
@@ -520,3 +524,8 @@ class Join(DataFrame):
 
   def rightParent(self):
     return self.right
+
+class Limit(DataFrame):
+  def __init__(self, n: int, parent):
+    super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    self.n = n

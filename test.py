@@ -55,7 +55,7 @@ class DataFrameTest(CodeMatcher):
 
   def setUp(self):
     c = sqlite3.connect("grizzly.db")
-    grizzly.use(RelationalExecutor(c, SQLGenerator("vector")))
+    grizzly.use(RelationalExecutor(c, SQLGenerator("sqlite")))
 
   def tearDown(self):
     grizzly.close()
@@ -438,7 +438,27 @@ class DataFrameTest(CodeMatcher):
     expected = "select * from (select * from events $t0) $t0 natural join (select * from events $t1) $t1"
     self.matchSnipped(actual, expected)
 
-  
+  def test_limitgen(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.limit(10)
+
+    expected = "select $t2.* from (select $t1.globaleventid, $t1.actor1name FROM (select * from events $t0) $t1) $t2 limit 10"
+    actual = df.generateQuery()
+
+    self.matchSnipped(actual, expected)
+
+  def test_limitExec(self):
+    n = 10
+
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.limit(n)
+    
+    data = df.collect()
+
+    self.assertEqual(len(data), n)
+
   # def test_predictPytorch(self):
 
   #   from grizzly.generator import GrizzlyGenerator
@@ -465,37 +485,46 @@ class DataFrameTest(CodeMatcher):
   #   GrizzlyGenerator._backend.queryGenerator = oldGen
 
   def test_externaltable(self):
-    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
-    actual = df.generateQuery()
-    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
-               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float') " \
-               "SELECT * FROM temp_ext_table$t0 $t0"
-    self.matchSnipped(actual, expected)
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend.queryGenerator
 
-    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True)
-    actual = df.generateQuery()
-    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
-               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|') " \
-               "SELECT * FROM temp_ext_table$t0 $t0"
-    self.matchSnipped(actual, expected)
+    newGen = SQLGenerator("vector")
+    GrizzlyGenerator._backend.queryGenerator = newGen
 
-    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',')
-    actual = df.generateQuery()
-    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
-               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'=',') " \
-               "SELECT * FROM temp_ext_table$t0 $t0"
-    self.matchSnipped(actual, expected)
+    try:
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
+      actual = df.generateQuery()
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+                "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float') " \
+                "SELECT * FROM temp_ext_table$t0 $t0"
+      self.matchSnipped(actual, expected)
 
-    df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', "csv")
-    actual = df.generateQuery()
-    expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
-               "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-               "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=',') " \
-               "SELECT * FROM temp_ext_table$t0 $t0"
-    self.matchSnipped(actual, expected)
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True)
+      actual = df.generateQuery()
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+                "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|') " \
+                "SELECT * FROM temp_ext_table$t0 $t0"
+      self.matchSnipped(actual, expected)
+
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',')
+      actual = df.generateQuery()
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+                "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'=',') " \
+                "SELECT * FROM temp_ext_table$t0 $t0"
+      self.matchSnipped(actual, expected)
+
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', "csv")
+      actual = df.generateQuery()
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+                "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
+                "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=',') " \
+                "SELECT * FROM temp_ext_table$t0 $t0"
+      self.matchSnipped(actual, expected)
+    finally:
+      GrizzlyGenerator._backend.queryGenerator = oldGen
 
 if __name__ == "__main__":
     unittest.main()
