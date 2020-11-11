@@ -2,6 +2,10 @@ from grizzly.expression import ColRef
 from grizzly.sqlgenerator import SQLGenerator
 from grizzly.generator import GrizzlyGenerator
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class RelationalExecutor(object):
   
   def __init__(self, connection, queryGenerator=SQLGenerator()):
@@ -18,14 +22,16 @@ class RelationalExecutor(object):
     return f"{prequeries} {qry}"
 
   def _execute(self, sql):
+    logger.debug(sql)
     cursor = self.connection.cursor()
     try:
       cursor.execute(sql)
-    except Exception as e:
-      print(f"Failed to execute query. Reason: {e}")
-      print(f"Query: {sql}")
-    finally:
       return cursor  
+    except Exception as e:
+      logger.error(f"Failed to execute query. Reason: {e}")
+      logger.error(f"Query: {sql}")
+      logger.exception(e)
+      raise e
     
 
   def close(self):

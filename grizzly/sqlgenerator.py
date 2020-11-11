@@ -7,6 +7,10 @@ from typing import List, Tuple
 from pathlib import Path
 import os
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class Query:
 
   def __init__(self, generator):
@@ -167,7 +171,7 @@ class Config:
 
   @staticmethod
   def loadProfile(profile: str):
-
+    logger.debug("loading configs for profile %s",profile)
     if not profile:
       return Config(profile, dict())
 
@@ -181,21 +185,22 @@ class Config:
       p = loc.joinpath(confFileName)
       if p.exists():
         path = p
-        print(f"found config file in: {str(path)}")
+        logger.debug(f"found config file in: {str(path)}")
         break
 
-    if not path:
-      print(f"Cannot find config file {confFileName} in {[str(l) for l in locations]} - creating default in {str(configDir)}...",end="")
-      import pkg_resources
+    if not path: # as not found in expected locations
+      logger.debug(f"Cannot find config file {confFileName} in {[str(l) for l in locations]} - creating default in {str(configDir)}...")
+      # load packaged ressource
+      import pkg_resources 
       my_data = pkg_resources.resource_string(__name__, "grizzly.yml").decode("utf-8") 
       
       filename = configDir.joinpath(confFileName)
-      os.makedirs(os.path.dirname(filename), exist_ok=True)
+      os.makedirs(os.path.dirname(filename), exist_ok=True) # create config directory
       with open(filename,'w') as target:
-        target.writelines(my_data)
+        target.writelines(my_data) # copy 
 
-      print("done")
-      path = filename
+      logger.debug("done")
+      path = filename # use below
 
 
     import yaml
