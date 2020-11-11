@@ -5,6 +5,9 @@ from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
 import inspect
 
+import logging
+logger = logging.getLogger(__name__)
+
 ###########################################################################
 # Base DataFrame with common operations
 
@@ -84,11 +87,11 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
-  def limit(self, n: int):
+  def limit(self, n: int, offset: int = -1):
     if n < 0:
       raise ValueError(f"LIMIT must not be negative (got {n})")
 
-    return Limit(n, self)
+    return Limit(n, offset, self)
 
   def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
@@ -267,6 +270,15 @@ class DataFrame(object):
   # magic function for read access by index: []
   def __getitem__(self, key):
     theType = type(key)
+
+    if isinstance(key, slice):
+      if key.step is not None:
+        logger.warn("Step is not supported for slice access on DataFrames")
+
+      n = key.stop
+
+      offset = key.start if key.start is not None else -1
+      return self.limit(n, offset)
 
     if isinstance(key, Expr):
       # print(f"filter col: {key}")
@@ -526,6 +538,7 @@ class Join(DataFrame):
     return self.right
 
 class Limit(DataFrame):
-  def __init__(self, n: int, parent):
+  def __init__(self, limit: int, offset: int, parent):
     super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
-    self.n = n
+    self.limit = limit
+    self.offset = offset

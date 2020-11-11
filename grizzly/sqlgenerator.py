@@ -8,7 +8,6 @@ from pathlib import Path
 import os
 
 import logging
-
 logger = logging.getLogger(__name__)
 
 class Query:
@@ -167,11 +166,15 @@ class Query:
         limitClause = self.generator.templates["limit"].lower()
         limitSQL = None
         if limitClause == "top":
-          limitSQL = f"SELECT TOP {df.n} {df.alias}.* FROM ({parentSQL}) {df.alias}"
+          limitSQL = f"SELECT TOP {df.limit} {df.alias}.* FROM ({parentSQL}) {df.alias}"
         elif limitClause == "limit":
-          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {df.n}"
+          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {df.limit}"
         else:
           raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
+
+        if df.offset >= 0:
+          limitSQL += f" OFFSET {df.offset}"
+
 
         return (preCode+pre, limitSQL)
 

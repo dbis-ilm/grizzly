@@ -459,6 +459,23 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(len(data), n)
 
+  def test_sliceExec(self):
+    df = grizzly.read_table("events")
+    df = df[5:10]
+    data = df.collect()
+
+    self.assertEqual(len(data),10)
+
+  def test_sliceGen(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df[5:10]
+
+    expected = "select $t2.* from (select $t1.globaleventid, $t1.actor1name FROM (select * from events $t0) $t1) $t2 limit 10 offset 5"
+    actual = df.generateQuery()
+
+    self.matchSnipped(actual, expected)
+
   # def test_predictPytorch(self):
 
   #   from grizzly.generator import GrizzlyGenerator
