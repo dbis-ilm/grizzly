@@ -451,10 +451,16 @@ class DataFrame(object):
     print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
     
   def __str__(self):
-    # strRep = GrizzlyGenerator.toString(self, pretty=True)
+    strRep = GrizzlyGenerator.toString(self, pretty=True)
+    return strRep
+    # tableStr = GrizzlyGenerator.table(self)
+    # return tableStr
+    
+
+  def __repr__(self) -> str:
     tableStr = GrizzlyGenerator.table(self)
     return tableStr
-    
+
 ###########################################################################
 # Concrete DataFrames representing an operation
 

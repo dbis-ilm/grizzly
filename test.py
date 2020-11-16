@@ -379,11 +379,10 @@ class DataFrameTest(CodeMatcher):
     splt = strDF.split("\n")
 
     rows = df.count()
-    # print(rows)
     dfLen = len(splt)
-    rowsLen = rows+ 3
+    rowsLen = rows+ 1 # column names
 
-    self.assertEqual(dfLen, rowsLen) # column names + top rule + bottom rule
+    self.assertEqual(dfLen, rowsLen) 
 
   def test_ViewJoin(self):
     df1 = grizzly.read_table("t1")

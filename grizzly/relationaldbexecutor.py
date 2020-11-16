@@ -43,7 +43,7 @@ class RelationalExecutor(object):
     tuples = []
 
     if includeHeader:
-      cols = [dec[0] for dec in rs.description]
+      cols = RelationalExecutor.__getHeader(rs)
       tuples.append(cols)
 
     for row in rs:
@@ -51,12 +51,29 @@ class RelationalExecutor(object):
 
     return tuples
 
+  @staticmethod
+  def __getHeader(rs) -> list[str]:
+    if rs.description:
+      cols = [dec[0] for dec in rs.description]
+    else:
+      cols = []
+    return cols
 
-  def table(self,df):
+  def table(self,df,limit=10):
     rs = self.execute(df)
     import beautifultable
     table = beautifultable.BeautifulTable()
+
+    header = RelationalExecutor.__getHeader(rs)
+    table.columns.header = header
+
+    cnt = 0
     for row in rs:
+
+      if cnt > limit:
+        break
+
+      cnt += 1
       table.rows.append(row)
 
     rs.close()
@@ -65,10 +82,7 @@ class RelationalExecutor(object):
   def toString(self, df, delim=",", pretty=False, maxColWidth=20, limit=20):
     rs = self.execute(df)
 
-    if rs.description:
-      cols = [dec[0] for dec in rs.description]
-    else:
-      cols = []
+    cols = RelationalExecutor.__getHeader(rs)
 
     if not pretty:
       strings = [delim.join(cols)]
