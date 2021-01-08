@@ -176,3 +176,17 @@ print(df.generate())
  - Currently, only the few operations above are supported -- more is to come
  - Grizzly is under active development and things might change.
  - There are certainly some bugs. Probably with complex queries
+
+
+# Vision
+
+Grizzly is a research project. We aim at bringing data-intensive operations back into the database system. Our plan is to extend Grizzly in the following ways - some of them are inspired by our other projects:
+
+  - Support for heterogeneous data sources:
+    - Combine data from different sources (relational DB, file, HDFS, NoSQL) in one program/query (i.e. Polystores, federated query processing)
+    - automatically import external data when neccessary
+  - Add spatial operations
+  - Stream processing operations
+  - Code generation
+    - Procude native code from the Python API
+ 

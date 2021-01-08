@@ -25,21 +25,6 @@ class DataFrame(object):
     else:
       self.parents = [parents]
 
-  def updateRef(self, x):
-    if isinstance(x,ColRef):
-      x.df = self
-      return x
-    elif isinstance(x, FuncCall):
-      x.df = self
-      return x
-    elif isinstance(x, str): # if only a string was given as column name
-      ref = ColRef(x, self)
-      return ref
-    elif isinstance(x, Expr):
-      x.left = self.updateRef(x.left) if isinstance(x.left, Expr) else x.left
-      x.right = self.updateRef(x.right) if isinstance(x.right, Expr) else x.right
-      return x
-
   def hasColumn(self, colName):
     if not self.columns:
       return True
@@ -399,7 +384,7 @@ class DataFrame(object):
   ###################################
   # aggregation functions
 
-  def _exec_or_add_aggr(self, col, aggFunc, alias):
+  def _exec_or_add_aggr(self, col, aggFunc):
     """
     Adaption to the nested query generation. If there is a grouping in the
     operator tree, the aggregation becomes a transformation. However, it must not
@@ -437,6 +422,20 @@ class DataFrame(object):
     # return self._execAgg("sum", col)
 
 
+  def _hasGrouping(self):
+    curr = self
+    while curr is not None:
+      if isinstance(curr, Grouping):
+        return curr
+
+      # FIXME: how to handle join paths?
+      if curr.parents is not None:
+        curr = curr.parents[0]
+      else:
+        curr = None
+
+    return None
+
   ###################################
   # show functions
 
@@ -461,7 +460,7 @@ class DataFrame(object):
   def __repr__(self) -> str:
     tableStr = GrizzlyGenerator.table(self)
     return tableStr
-
+    
 ###########################################################################
 # Concrete DataFrames representing an operation
 

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="grizzly-sql",
-    version="0.1.2",
+    version="0.1.4",
     author="Databases & Information Systems Group, TU Ilmenau",
     author_email="stefan.hagedorn@tu-ilmenau.de",
     description="A Python-to-SQL transpiler to work with relational databases",
@@ -21,4 +21,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
+    include_package_data=True
 )
