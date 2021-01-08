@@ -71,6 +71,62 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_Having(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["theyear","actor1name"])
+    a = g.agg(col="actor2name", aggType=AggregateType.COUNT,alias="cnt_actor")
+    f = a.filter(a["cnt_actor"] > 2)
+    
+    expected = "select $t1.theyear, $t1.actor1name, count($t1.actor2name) as cnt_actor from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name having cnt_actor > 2"
+    actual = f.generateQuery()
+
+    self.matchSnipped(actual, expected)
+
+  def test_HavingExec(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["actor1name"])
+    a = g.agg(col="actor2name", aggType=AggregateType.COUNT,alias="cnt_actor")
+    f = a.filter(a["cnt_actor"] > 2)
+    
+    f.show()
+
+  def test_groupByTableAggComputedCol(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["theyear","actor1name"])
+    g["cnt_actor"] = g.count("actor2name") # FIXME: should not trigger execution but add the function to projection
+    g["min_actor"] = g.min(g.actor2name) 
+
+    expected = "select $t1.theyear, $t1.actor1name, count($t1.actor2name) as cnt_actor, min($t1.actor2name) as min_actor from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name"
+    actual = g.generateQuery()
+
+    print(actual)
+    self.matchSnipped(actual, expected)
+
+  def test_HavingTwice(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["theyear","actor1name"])
+    a = g.agg(col="actor2name", aggType=AggregateType.COUNT,alias="cnt_actor")
+    a = a.agg(col="actor2name", aggType=AggregateType.MIN,alias="min_actor")
+    f = a.filter(a["cnt_actor"] > 2)
+    f = f.filter(a["min_actor"] > 10)
+
+    expected = "select $t1.theyear, $t1.actor1name, count($t1.actor2name) as cnt_actor, min($t1.actor2name) as min_actor from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name having cnt_actor > 2 and min_actor > 10"
+    actual = f.generateQuery()
+
+    self.matchSnipped(actual, expected)
+
+  def test_HavingTwiceExpr(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["theyear","actor1name"])
+    a = g.agg(col="actor2name", aggType=AggregateType.COUNT,alias="cnt_actor")
+    a = a.agg(col="actor2name", aggType=AggregateType.MIN,alias="min_actor")
+    f = a.filter((a["cnt_actor"] > 2) & (a["min_actor"] > 10))
+
+    expected = "select $t1.theyear, $t1.actor1name, count($t1.actor2name) as cnt_actor, min($t1.actor2name) as min_actor from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name having cnt_actor > 2 and min_actor > 10"
+    actual = f.generateQuery()
+
+    self.matchSnipped(actual, expected)
+
   def test_New(self):
     df = grizzly.read_table("events")
     df = df["a"]
@@ -165,22 +221,42 @@ class DataFrameTest(CodeMatcher):
     # m = g.mean("avgtone")
     # self.assertEqual(m, 0.909090909090911)
 
-  def test_groupByTableAgg(self):
+  def test_groupByAggGroupCol(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == 476829606]
     g = df.groupby(["year","monthyear"])
 
-    a = g.count("monthyear")
-    # print(f"cnt: {a}")
-    self.assertEqual(a, 1)
+    cnt = g.count("monthyear", "cnt")
+    # expected = "select count($t2.monthyear) as cnt from (select $t1.theyear, $t1.monthyear from (select * from (select * from events $t3) $t0 where $t0.globaleventid = 476829606) $t1 group by $t1.theyear, $t1.monthyear) $t2"
+    # self.matchSnipped(actual, expected)
 
-  def test_groupByTableAggStar(self):
+    self.assertEquals(cnt, 1)
+
+  def test_groupByAggGroupColCode(self):
+    df = grizzly.read_table("events") 
+    df = df[df['globaleventid'] == 476829606]
+    g = df.groupby(["theyear","monthyear"])
+
+    actual = g.agg(col="monthyear", aggType=AggregateType.COUNT, alias="cnt").generateQuery()
+    expected = "select count($t2.monthyear) as cnt from (select $t1.theyear, $t1.monthyear from (select * from (select * from events $t3) $t0 where $t0.globaleventid = 476829606) $t1 group by $t1.theyear, $t1.monthyear) $t2"
+    self.matchSnipped(actual, expected)
+
+
+  def test_groupByAgg(self):
+    df = grizzly.read_table("events") 
+    df = df[df['globaleventid'] == 476829606]
+    g = df.groupby(["theyear","monthyear"])
+
+    a = g.count("actor1name", "cnt").collect()
+    # print(f"cnt: {a}")
+    self.assertEquals(len(a),1)
+
+  def test_groupByCountGroups(self):
     df = grizzly.read_table("events") 
     g = df.groupby("year")
 
-    a = g.count()
-    # print(f"cnt: {a}")
-    self.assertEqual(a, 3)
+    a = g.count("theyear").collect()
+    self.assertEqual(len(a), 3)
 
   def test_joinTest(self):
     df = grizzly.read_table("events") 

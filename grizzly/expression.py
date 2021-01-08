@@ -30,7 +30,12 @@ class ColRef(object):
       s = self.column
     return s
 
+<<<<<<< Updated upstream
 
+=======
+  # def __eq__(self, o: object) -> bool:
+  #     return isinstance(o, ColRef) and o.column == self.column
+>>>>>>> Stashed changes
 
 class Eq(Expr):
   def __init__(self, left, right):

@@ -2,26 +2,36 @@ from grizzly.expression import ColRef
 from grizzly.sqlgenerator import SQLGenerator
 from grizzly.generator import GrizzlyGenerator
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class RelationalExecutor(object):
   
-  def __init__(self, connection, sqlGenerator=SQLGenerator()):
+  def __init__(self, connection, queryGenerator=SQLGenerator()):
     super().__init__()
     self.connection = connection
-    self.sqlGenerator = sqlGenerator
+    self.queryGenerator = queryGenerator
 
   def generate(self, df):
-    return self.sqlGenerator.generate(df)
+    return self.queryGenerator.generate(df)
+
+  def generateQuery(self, df):
+    (pre,qry) = self.generate(df)
+    prequeries = ";".join(pre)
+    return f"{prequeries} {qry}"
 
   def _execute(self, sql):
+    logger.debug(sql)
     cursor = self.connection.cursor()
     try:
       cursor.execute(sql)
-    except Exception as e:
-      print("Failed to execute query.")
-      print(f"Reasong: {e}")
-      print(f"Query:\n{sql}")
-    finally:
       return cursor  
+    except Exception as e:
+      logger.error(f"Failed to execute query. Reason: {e}")
+      logger.error(f"Query: {sql}")
+      logger.exception(e)
+      raise e
     
 
   def close(self):
@@ -33,7 +43,7 @@ class RelationalExecutor(object):
     tuples = []
 
     if includeHeader:
-      cols = [dec[0] for dec in rs.description]
+      cols = RelationalExecutor.__getHeader(rs)
       tuples.append(cols)
 
     for row in rs:
@@ -41,29 +51,53 @@ class RelationalExecutor(object):
 
     return tuples
 
+  @staticmethod
+  def __getHeader(rs) -> list[str]:
+    if rs.description:
+      cols = [dec[0] for dec in rs.description]
+    else:
+      cols = []
+    return cols
 
-  def table(self,df):
+  def table(self,df,limit=10):
     rs = self.execute(df)
     import beautifultable
     table = beautifultable.BeautifulTable()
+
+    header = RelationalExecutor.__getHeader(rs)
+    table.columns.header = header
+
+    cnt = 0
     for row in rs:
-      table.append_row(row)
+
+      if cnt > limit:
+        break
+
+      cnt += 1
+      table.rows.append(row)
 
     rs.close()
     return str(table)
 
-  def toString(self, df, delim=",", pretty=False, maxColWidth=20):
+  def toString(self, df, delim=",", pretty=False, maxColWidth=20, limit=20):
     rs = self.execute(df)
 
-    cols = [dec[0] for dec in rs.description]
-    
+    cols = RelationalExecutor.__getHeader(rs)
 
     if not pretty:
       strings = [delim.join(cols)]
+      cnt = 0
       for row in rs:
-        strings.append(delim.join([str(col) for col in row]))
+        cnt += 1
+        if limit is None or cnt <= limit:
+          strings.append(delim.join([str(col) for col in row]))
+        
 
       rs.close()
+
+      if  limit is not None and cnt > limit and cnt - limit > 0:
+        strings.append(f"and {cnt - limit} more...")
+
       return "\n".join(strings)
     else:
       firstRow = rs.fetchone()
@@ -85,25 +119,37 @@ class RelationalExecutor(object):
         return rowFormat.format(*values)
 
       resultRep = [formatRow(cols), formatRow(firstRow)]
-      
+      cnt = 1 # we already fetched and processed the first row
       for row in rs:
-        resultRep.append(formatRow(row))
+        cnt += 1
+        if  limit is None or cnt <= limit:
+          resultRep.append(formatRow(row))
 
       rs.close()
+
+      if limit is not None and cnt > limit and cnt - limit > 0:
+        resultRep.append(f"and {cnt - limit} more...")
+
       return "\n".join(resultRep)
 
   def execute(self, df):
     """
     Execute the operations and print results to stdout
+    If pre-queries are necessary, e.g. for UDF or External table creation,
+    they are executed first.
 
     Non-pretty mode outputs in CSV style -- the delim parameter can be used to 
     set the delimiter. Non-pretty mode ignores the maxColWidth parameter.
     """
 
-    sql = self.sqlGenerator.generate(df)
+    (pre,sql) = self.queryGenerator.generate(df)
+    for pq in pre:
+      # print(pq)
+      self._execute(pq).close()
+    # print(sql)
     return self._execute(sql)
 
-  def _execAgg(self, df, func, col):
+  def _execAgg(self, df, col, func, alias):
     """
     Actually compute the aggregation function.
 
@@ -114,39 +160,19 @@ class RelationalExecutor(object):
     table and return the scalar result directly
     """
 
-    # if isinstance(df, Grouping):
-    #   newOp = Grouping(self.op.groupcols, self.op.parent)
-    #   newOp.setAggFunc(funcCode)
-      
-    #   return DataFrame(self.columns, newOp)
-      
-    # else:
-    return self._doExecAgg(func, col, df)
+    return self._doExecAgg(df, col, func, alias)
 
-  def _gen_agg(self, func, col, df):
-    
-    # aggregation over a table is performed in a way that the actual query
-    # that was built is executed as an inner query and around that, we 
-    # compute the aggregation
+  def _gen_agg(self, df, col, func):
+    return self.queryGenerator._generateAggCode(df, col, func)
 
-    if df.parents:
-      innerSQL = self.generate(df)
-      df.alias = GrizzlyGenerator._incrAndGetTupleVar()
-      funcCode = SQLGenerator._getFuncCode(func, col, df)
-      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
-      # aggSQL = innerSQL
-    else:
-      funcCode = SQLGenerator._getFuncCode(func, col, df)
-      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
-
-    return aggSQL
-
-  def _doExecAgg(self, func, col, df):
+  def _doExecAgg(self, df, col, func, alias):
     """
     Really executes the aggregation and returns the single result
     """
-    aggSQL = self._gen_agg(func, col, df)
+    (pre, aggQry) = self.queryGenerator._generateAggCode(df, col, func, alias)
+    for pq in pre:
+      self._execute(pq).close()
     # execute an SQL query and get the result set
-    rs = self._execute(aggSQL)
+    rs = self._execute(aggQry)
     #fetch first (and only) row, return first column only
     return rs.fetchone()[0]  
