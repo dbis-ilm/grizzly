@@ -66,24 +66,21 @@ class FuncCall(Expr):
     
     return s
 
-class ColRef(Expr):
-  def __init__(self, column, df, alias: str = ""):
-    # if column != "*" and not df.hasColumn(column):
-    #   raise ExpressionException(f"No such column: {column}")
-    self.column = column
-    self.df = df
-    self.alias = alias
+class ComputedCol(Expr):
+  def __init__(self, newName, value):
+    self.colname = newName
+    self.value = value
 
-  def __str__(self):
-    if self.df and self.df.alias and self.column != "*":
-      s = f"{self.df.alias}.{self.column}"
-    else:
-      s = self.column
-    
-    if self.alias != "":
-      s += f" as {self.alias}"
-    
-    return s
+class ColRef(Expr):
+  def __init__(self, column: str, df, alias: str = ""):
+    if not isinstance(column, str):
+      raise ValueError(f"Invalid value for column: {column}")
+    self.column = column
+    self.alias = alias
+    self.df = df
+
+  def colName(self):
+    return self.column
 
 class Eq(Expr):
   def __init__(self, left, right):

@@ -88,7 +88,17 @@ class DataFrameTest(CodeMatcher):
     a = g.agg(col="actor2name", aggType=AggregateType.COUNT,alias="cnt_actor")
     f = a.filter(a["cnt_actor"] > 2)
     
-    f.show()
+    actual = f.collect()
+    self.assertEqual(len(actual), 872)
+
+    failedTuples = []
+    for (actor1name,cnt_actor) in actual:
+      if cnt_actor > 2:
+        failedTuples.append( (actor1name, cnt_actor) )
+
+    if len(failedTuples) <= 0:
+      msg = ",".join(failedTuples)
+      self.fail(f"tuples not matching having clause: {msg}")
 
   def test_groupByTableAggComputedCol(self):
     df = grizzly.read_table("events")
@@ -251,6 +261,7 @@ class DataFrameTest(CodeMatcher):
     g = df.groupby(["theyear","monthyear"])
 
     actual = g.agg(col="monthyear", aggType=AggregateType.COUNT, alias="cnt").generateQuery()
+
     expected = "select count($t2.monthyear) as cnt from (select $t1.theyear, $t1.monthyear from (select * from (select * from events $t3) $t0 where $t0.globaleventid = 476829606) $t1 group by $t1.theyear, $t1.monthyear) $t2"
     self.matchSnipped(actual, expected)
 
@@ -268,8 +279,8 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("events") 
     g = df.groupby("theyear")
 
-    a = g.count("theyear").collect()
-    self.assertEqual(len(a), 3)
+    a = g.count("theyear")
+    self.assertEqual(a, 3)
 
   def test_joinTest(self):
     df = grizzly.read_table("events") 

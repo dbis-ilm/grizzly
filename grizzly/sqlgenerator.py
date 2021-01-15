@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import FuncCall, ColRef, Expr, ModelType, Or, And
+from grizzly.expression import ComputedCol, FuncCall, ColRef, Expr, ModelType, Or, And
 from grizzly.generator import GrizzlyGenerator
 
 from typing import List, Tuple
@@ -14,60 +14,28 @@ class Query:
 
   def __init__(self, generator):
     self.generator = generator
-    # self.alias = alias
-
-  def _reset(self):
-    pass
-
-  def _doExprToSQL(self, expr):
-    exprSQL = ""
-    # right hand side is a string constant
-    if isinstance(expr, str):
-      exprSQL = f"'{expr}'"
-    # right hand side is a dataframe (i.e. subquery)
-    elif isinstance(expr, DataFrame): 
-      # if right hand side is a DataFrame, we need to create code first 
-      subQry = Query(self.generator)
-      (pre,exprSQL) = subQry._buildFrom(expr)
-
-    elif isinstance(expr, ColRef):
-      exprSQL = str(expr)
-      # exprSQL = f"{alias}.{expr.column}"
-
-    elif isinstance(expr, Expr):
-      l = self._doExprToSQL(expr.left)
-      r = self._doExprToSQL(expr.right)
-
-      exprSQL = f"{l} {expr.opStr} {r}"
-    # right hand side is some constant (other than string), e.g. number
-    else:
-      exprSQL = str(expr)
-
-    return exprSQL
-
-  def _exprToSQL(self, expr):
-    leftExpr = self._doExprToSQL(expr.left)
-    rightExpr = self._doExprToSQL(expr.right)
-
-    return f"{leftExpr} {expr.opStr} {rightExpr}"
 
   def _buildFrom(self,df) -> Tuple[List[str], str, str]:
 
     if df is not None:
 
-      computedCols = ""
+      computedCols = []
       preCode = []
 
-      if df.computedCols:
-        computedCols = ",".join(str(x) for x in df.computedCols)
-        preCode = [self.generator.generateCreateFunc(call.udf) for call in df.computedCols if isinstance(call, FuncCall)]
+      for x in df.computedCols:
+        (exprPre, exprSQL) = SQLGenerator._exprToSQL(x)
+        preCode += exprPre
+        computedCols.append(exprSQL)
+
+      computedCols = ",".join(computedCols)
+      preCode = [self.generator.generateCreateFunc(call.udf) for call in df.computedCols if isinstance(call, FuncCall)]
 
       if isinstance(df,Table):
         proj = "*"
         if computedCols:
           proj += ","+computedCols
           
-        return (preCode, f"SELECT {proj} FROM {df.table} {df.alias}")
+        return (preCode, f"SELECT {proj} FROM {df.table} {df.id}")
         
 
       elif isinstance(df, ExternalTable):
@@ -75,7 +43,7 @@ class Query:
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + self.generator._generateCreateExtTable(df), f"SELECT {proj} FROM {df.table} {df.alias}")
+        return (preCode + SQLGenerator._generateCreateExtTable(df), f"SELECT {proj} FROM {df.table} {df.id}")
 
       elif isinstance(df,Projection):
         subQry = Query(self.generator)
@@ -83,25 +51,30 @@ class Query:
 
 
         prefixed = "*"
-        if df.attrs:
-          prefixed = ",".join([str(attr) for attr in df.attrs])
+        if df.columns:
+          prefixed = []
+          for (ePre, exprSQL) in [SQLGenerator._exprToSQL(attr) for attr in df.columns]:
+            pre += ePre
+            prefixed.append(exprSQL)
+          
+          prefixed = ",".join(prefixed)
 
         if computedCols:
           prefixed += ","+computedCols
         
-        return (preCode + pre, f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}")
+        return (preCode + pre, f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.id}")
 
       elif isinstance(df,Filter):
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        exprStr = self._exprToSQL(df.expr)
+        (exprPre,exprStr) = SQLGenerator._exprToSQL(df.expr)
 
         proj = "*"
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + pre, f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}")
+        return (preCode + pre + exprPre, f"SELECT {proj} FROM ({parentSQL}) {df.id} WHERE {exprStr}")
 
       elif isinstance(df, Join):
 
@@ -112,21 +85,25 @@ class Query:
         (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
 
         if isinstance(df.on, Or) or isinstance(df.on, And):
-          lAlias = df.leftParent().alias
-          rAlias = df.rightParent().alias
-          onSQL = "ON " + self._exprToSQL(df.on)
+          lAlias = df.leftParent().id
+          rAlias = df.rightParent().id
+          (exprPre, onSQL) = SQLGenerator._exprToSQL(df.on)
+          onSQL = "ON " + onSQL
+          rpre += exprPre
         elif isinstance(df.on, Expr):
           # use the alias from the already built join condition
-          lAlias = df.on.left.df.alias
-          rAlias = df.on.right.df.alias
-          onSQL = "ON " + self._exprToSQL(df.on)
+          lAlias = df.on.left.df.id
+          rAlias = df.on.right.df.id
+          (exprPre, onSQL) = SQLGenerator._exprToSQL(df.on)
+          onSQL = "ON " + onSQL
+          rpre += exprPre
         elif isinstance(df.on, list):
           lAlias = GrizzlyGenerator._incrAndGetTupleVar()
           rAlias = GrizzlyGenerator._incrAndGetTupleVar()
           onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
         else:
-          lAlias = df.leftParent().alias
-          rAlias = df.rightParent().alias
+          lAlias = df.leftParent().id
+          rAlias = df.rightParent().id
           onSQL = ""
 
         # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
@@ -143,17 +120,31 @@ class Query:
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        by = ",".join([str(attr) for attr in df.groupCols])
+        byCols = []
+        for attr in df.groupCols:
+          (exprPre, exprSQL) = SQLGenerator._exprToSQL(attr)
+          pre += exprPre
+          byCols.append(exprSQL)
+
+        by = ",".join(byCols)
+
+        # by = ",".join([SQLGenerator._exprToSQL(attr) for attr in df.groupCols])
 
         funcCode = ""
         for (func, col, alias) in df.aggFunc:
           # a = f" as {alias}" if alias else ""
           funcCode += ", " + SQLGenerator._getFuncCode(df, col, func, alias)
         
-        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {by}"
+        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.id} GROUP BY {by}"
 
+        havings = []
         if df.having:
-          exprStr = " AND ".join([self._exprToSQL(e) for e in df.having])
+          for h in df.having:
+            (hPre,hSQL) = SQLGenerator._exprToSQL(h)
+            pre += hPre
+            havings.append(hSQL)
+
+          exprStr = " AND ".join(havings)
           groupSQL += f" HAVING {exprStr}"
 
         #if the computed column is an aggregate over the groups, 
@@ -170,12 +161,12 @@ class Query:
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        limitClause = self.generator.templates["limit"].lower()
+        limitClause = SQLGenerator.templates["limit"].lower()
         limitSQL = None
         if limitClause == "top":
-          limitSQL = f"SELECT TOP {df.limit} {df.alias}.* FROM ({parentSQL}) {df.alias}"
+          limitSQL = f"SELECT TOP {df.limit} {df.id}.* FROM ({parentSQL}) {df.id}"
         elif limitClause == "limit":
-          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {df.limit}"
+          limitSQL = f"SELECT {df.id}.* FROM ({parentSQL}) {df.id} LIMIT {df.limit}"
         else:
           raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
 
@@ -189,10 +180,16 @@ class Query:
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        by = ",".join([str(attr) for attr in df.by])
+        by = []
+        for attr in df.by:
+          (exprPre, exprSQL) = SQLGenerator._exprToSQL(attr)
+          pre += exprPre
+          by.append(exprSQL)
+
+        by = ",".join(by)
         direction = "ASC" if df.ascending else "DESC"
 
-        qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
+        qry = f"SELECT * FROM ({parentSQL}) {df.id} ORDER BY {by} {direction}"
 
         return (preCode+pre, qry)
 
@@ -265,9 +262,14 @@ SqlBigInt = NewType("bigint", int)
 class SQLGenerator:
 
   def __init__(self, profile: str = None):
-    self.profile = profile
-    self.templates = Config.loadProfile(profile)
-    self.cnt = 0
+      super().__init__()
+      SQLGenerator.init(profile)
+
+  @staticmethod
+  def init(profile):
+    # self.profile = profile
+    SQLGenerator.templates = Config.loadProfile(profile)
+    # self.cnt = 0
   
   @staticmethod
   def _unindent(lines: list) -> list:
@@ -289,12 +291,57 @@ class SQLGenerator:
     else: 
       return pythonType
 
-  def generateCreateFunc(self, udf: UDF) -> str:
+  @staticmethod
+  def _exprToSQL(expr) -> Tuple[list[str], str]:
+    exprSQL = ""
+    pre = []
+    # right hand side is a string constant
+    if isinstance(expr, str):
+      exprSQL = f"'{expr}'"
+    # right hand side is a dataframe (i.e. subquery)
+    elif isinstance(expr, DataFrame): 
+      # if right hand side is a DataFrame, we need to create code first 
+      subQry = Query(SQLGenerator())
+      (pre,exprSQL) = subQry._buildFrom(expr)
+
+    elif isinstance(expr, ColRef):
+      if expr.df and expr.column != "*":
+        exprSQL = f"{expr.df.id}.{expr.column}"
+      else:
+        exprSQL = expr.column
+
+      if expr.alias:
+        exprSQL += f" as {expr.alias}"
+
+    elif isinstance(expr, ComputedCol):
+      (pre,exprSQL) = SQLGenerator._exprToSQL(expr.value)
+      exprSQL += f" as {expr.colname}"      
+
+    elif isinstance(expr, FuncCall):
+      if expr.udf:
+        pre = [SQLGenerator.generateCreateFunc(expr.udf)]
+      exprSQL = SQLGenerator._getFuncCode(expr.df, expr.inputCols[0],expr.funcName, expr.alias)
+
+    elif isinstance(expr, Expr):
+      (lPre,l) = SQLGenerator._exprToSQL(expr.left)
+      (rPre,r) = SQLGenerator._exprToSQL(expr.right)
+
+      exprSQL = f"{l} {expr.opStr} {r}"
+      pre = lPre + rPre
+    # right hand side is some constant (other than string), e.g. number
+    else:
+      exprSQL = str(expr)
+
+    return (pre,exprSQL)
+
+
+  @staticmethod
+  def generateCreateFunc(udf: UDF) -> str:
     paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
     returnType = SQLGenerator._mapTypes(udf.returnType)
 
     if isinstance(udf, ModelUDF):
-      lines = self.templates[udf.modelType.name + "_code"]
+      lines = SQLGenerator.templates[udf.modelType.name + "_code"]
       for key, value in udf.templace_replacement_dict.items():
         lines = lines.replace(key, str(value))
 
@@ -303,14 +350,15 @@ class SQLGenerator:
       lines = SQLGenerator._unindent(lines)
       lines = "".join(lines)
 
-    template = self.templates["createfunction"]
+    template = SQLGenerator.templates["createfunction"]
     code = template.replace("$$name$$", udf.name)\
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\
       .replace("$$code$$",lines)
     return code
 
-  def _generateCreateExtTable(self, tab: ExternalTable) -> List[str]:
+  @staticmethod
+  def _generateCreateExtTable(tab: ExternalTable) -> List[str]:
     queries = []
 
     # In place string replacement
@@ -328,7 +376,7 @@ class SQLGenerator:
       options.append(f"'schema'='{schemaString}'")
     optionString = f""", OPTIONS=({",".join(options)})"""
 
-    template = self.templates["externaltable"]
+    template = SQLGenerator.templates["externaltable"]
     code = template.replace("$$name$$", tab.table)\
       .replace("$$schema$$", schemaString)\
       .replace("$$filenames$$", tab.filenames)\
@@ -340,16 +388,20 @@ class SQLGenerator:
     return queries
 
   @staticmethod
-  def _getFuncCode(df, col, func, alias) -> str:
-    if not isinstance(col, ColRef):
+  def _getFuncCode(df, col, func, alias = None) -> str:
+    if not isinstance(col, ColRef) and col != "*":
       colName = ColRef(col, df)
     else:
       colName = col
-    
+    (_,colName) = SQLGenerator._exprToSQL(colName)
+
+
     if func == AggregateType.MEAN:
       funcStr = "avg"
-    else:
+    elif str(func).lower().startswith("aggregatetype."):
       funcStr = str(func).lower()[len("aggregatetype."):]
+    else:
+      funcStr = func
 
     funcCode = f"{funcStr}({colName})"
 
@@ -367,11 +419,11 @@ class SQLGenerator:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       funcCode = SQLGenerator._getFuncCode(df, col, func, alias)
-      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
+      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.id}"
       
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
+      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.id}"
       pre = []
 
     return (pre, aggSQL)
