@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class DataFrame(object):
 
-  def __init__(self, columns, parents, id: str = ""):
+  def __init__(self, columns, parents, alias: str = ""):
     super(DataFrame, self).__init__()
 
     if not columns:
@@ -30,7 +30,7 @@ class DataFrame(object):
     else:
       self.parents = [parents]
 
-    self.id = id
+    self.alias = alias
 
   def updateRef(self, x):                                                                                               
     if isinstance(x,ColRef):                                                                                            
@@ -65,6 +65,9 @@ class DataFrame(object):
     return Filter(expr, self)
 
   def project(self, cols):
+    if not isinstance(cols, list):
+      cols = [cols]
+
     return Projection(cols, self)
 
   def distinct(self):
@@ -300,8 +303,9 @@ class DataFrame(object):
       # print(f"filter col: {key}")
       return self.filter(key)
     elif theType is str: # a single string is given -> project to that column
-      # return self.project(ColRef(key,None))
-      return Projection([ColRef(key, self)],self)
+      return self.project(ColRef(key,None))
+      # c = 
+      # return Projection([ColRef(key, self)],self)
     elif theType is Projection: # if in the projection list e.g. "df.a" was given
       return self.project([key.columns[0]])
     elif theType is list:
@@ -329,77 +333,63 @@ class DataFrame(object):
   ###################################
   # Comparison expressions
 
-  def __eq__(self, other):
-    if not isinstance(self, Projection):
+  @staticmethod
+  def __expressionUpdateRefs(left, right):
+    if not isinstance(left, Projection):
       raise ExpressionException(f"Must have a projection to access fields, but got {type(self)}")
-    if len(self.columns) != 1:
+    if len(left.columns) != 1:
       attrsStr = ",".join([str(x) for x in self.columns]) if self.columns else ""
       raise ExpressionException(f"Projection list must have exactly one column, but is: {len(self.columns)}: [{attrsStr}]")
 
-    if isinstance(other, DataFrame):
-      r = other.columns[0]
+    if isinstance(right, Projection):
+      r = right.columns[0]
+      if len(right.parents) > 0:
+        # we have a projection in an expression to reference a variable only
+        # thus, we want to update to the original DF in order to have the correct
+        # qualifier, instead of the one created for the projection
+        right.parents[0].updateRef(r)
+      else:
+        print("a projection without a parent should not happen... is your script correct?")
     else:
-      r = other
+      r = right
+
+    # we know we are a projection. Update the projection-ref to our parent
+    left.parents[0].updateRef(left.columns[0])
+
+    return r
+
+  def __eq__(self, other):
+    r = DataFrame.__expressionUpdateRefs(self, other)
 
     expr = Eq(self.columns[0], r)
     return expr
 
   def __gt__(self, other):
-    if not isinstance(self, Projection) or len(self.columns) != 1:
-      raise ExpressionException("Must have a projection with exactly one attribute")
-
-    if isinstance(other, DataFrame):
-      r = other.columns[0]
-    else:
-      r = other
+    r = DataFrame.__expressionUpdateRefs(self, other)
 
     expr = Gt(self.columns[0], r)
     return expr
 
   def __lt__(self, other):
-    if not isinstance(self, Projection) or len(self.columns) != 1:
-      raise ExpressionException("Must have a projection with exactly one attribute")
-
-    if isinstance(other, DataFrame):
-      r = other.columns[0]
-    else:
-      r = other
+    r = DataFrame.__expressionUpdateRefs(self, other)
 
     expr = Lt(self.columns[0], r)
     return expr
 
   def __ge__(self, other):
-    if not isinstance(self, Projection) or len(self.columns) != 1:
-      raise ExpressionException("Must have a projection with exactly one attribute")
-
-    if isinstance(other, DataFrame):
-      r = other.columns[0]
-    else:
-      r = other
+    r = DataFrame.__expressionUpdateRefs(self, other)
 
     expr = Ge(self.columns[0], r)
     return expr
   
   def __le__(self, other):
-    if not isinstance(self, Projection) or len(self.columns) != 1:
-      raise ExpressionException("Must have a projection with exactly one attribute")
-
-    if isinstance(other, DataFrame):
-      r = other.columns[0]
-    else:
-      r = other
+    r = DataFrame.__expressionUpdateRefs(self, other)
 
     expr = Le(self.columns[0], r)
     return expr
 
   def __ne__(self, other):
-    if not isinstance(self, Projection) or len(self.columns) != 1:
-      raise ExpressionException("Must have a projection with exactly one attribute")
-
-    if isinstance(other, DataFrame):
-      r = other.columns[0]
-    else:
-      r = other
+    r = DataFrame.__expressionUpdateRefs(self, other)
 
     expr = Ne(self.columns[0], r)
     return expr

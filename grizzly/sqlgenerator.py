@@ -35,7 +35,7 @@ class Query:
         if computedCols:
           proj += ","+computedCols
           
-        return (preCode, f"SELECT {proj} FROM {df.table} {df.id}")
+        return (preCode, f"SELECT {proj} FROM {df.table} {df.alias}")
         
 
       elif isinstance(df, ExternalTable):
@@ -43,7 +43,7 @@ class Query:
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + SQLGenerator._generateCreateExtTable(df), f"SELECT {proj} FROM {df.table} {df.id}")
+        return (preCode + SQLGenerator._generateCreateExtTable(df), f"SELECT {proj} FROM {df.table} {df.alias}")
 
       elif isinstance(df,Projection):
         subQry = Query(self.generator)
@@ -62,7 +62,7 @@ class Query:
         if computedCols:
           prefixed += ","+computedCols
         
-        return (preCode + pre, f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.id}")
+        return (preCode + pre, f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}")
 
       elif isinstance(df,Filter):
         subQry = Query(self.generator)
@@ -74,7 +74,7 @@ class Query:
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + pre + exprPre, f"SELECT {proj} FROM ({parentSQL}) {df.id} WHERE {exprStr}")
+        return (preCode + pre + exprPre, f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}")
 
       elif isinstance(df, Join):
 
@@ -85,15 +85,15 @@ class Query:
         (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
 
         if isinstance(df.on, Or) or isinstance(df.on, And):
-          lAlias = df.leftParent().id
-          rAlias = df.rightParent().id
+          lAlias = df.leftParent().alias
+          rAlias = df.rightParent().alias
           (exprPre, onSQL) = SQLGenerator._exprToSQL(df.on)
           onSQL = "ON " + onSQL
           rpre += exprPre
         elif isinstance(df.on, Expr):
           # use the alias from the already built join condition
-          lAlias = df.on.left.df.id
-          rAlias = df.on.right.df.id
+          lAlias = df.on.left.df.alias
+          rAlias = df.on.right.df.alias
           (exprPre, onSQL) = SQLGenerator._exprToSQL(df.on)
           onSQL = "ON " + onSQL
           rpre += exprPre
@@ -102,8 +102,8 @@ class Query:
           rAlias = GrizzlyGenerator._incrAndGetTupleVar()
           onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
         else:
-          lAlias = df.leftParent().id
-          rAlias = df.rightParent().id
+          lAlias = df.leftParent().alias
+          rAlias = df.rightParent().alias
           onSQL = ""
 
         # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
@@ -135,7 +135,7 @@ class Query:
           # a = f" as {alias}" if alias else ""
           funcCode += ", " + SQLGenerator._getFuncCode(df, col, func, alias)
         
-        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.id} GROUP BY {by}"
+        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {by}"
 
         havings = []
         if df.having:
@@ -164,9 +164,9 @@ class Query:
         limitClause = SQLGenerator.templates["limit"].lower()
         limitSQL = None
         if limitClause == "top":
-          limitSQL = f"SELECT TOP {df.limit} {df.id}.* FROM ({parentSQL}) {df.id}"
+          limitSQL = f"SELECT TOP {df.limit} {df.alias}.* FROM ({parentSQL}) {df.alias}"
         elif limitClause == "limit":
-          limitSQL = f"SELECT {df.id}.* FROM ({parentSQL}) {df.id} LIMIT {df.limit}"
+          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {df.limit}"
         else:
           raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
 
@@ -189,7 +189,7 @@ class Query:
         by = ",".join(by)
         direction = "ASC" if df.ascending else "DESC"
 
-        qry = f"SELECT * FROM ({parentSQL}) {df.id} ORDER BY {by} {direction}"
+        qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
 
         return (preCode+pre, qry)
 
@@ -306,7 +306,7 @@ class SQLGenerator:
 
     elif isinstance(expr, ColRef):
       if expr.df and expr.column != "*":
-        exprSQL = f"{expr.df.id}.{expr.column}"
+        exprSQL = f"{expr.df.alias}.{expr.column}"
       else:
         exprSQL = expr.column
 
@@ -419,11 +419,11 @@ class SQLGenerator:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       funcCode = SQLGenerator._getFuncCode(df, col, func, alias)
-      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.id}"
+      aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
       
     else:
       funcCode = SQLGenerator._getFuncCode(df, col, func)
-      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.id}"
+      aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
       pre = []
 
     return (pre, aggSQL)

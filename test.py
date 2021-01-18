@@ -301,13 +301,22 @@ class DataFrameTest(CodeMatcher):
   def test_complexJoin(self):
     df1 = grizzly.read_table("t1")
     df2 = grizzly.read_table("t2")
-
-    j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']), how="left outer")
+    j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']) , how="left outer")
 
     # expected = "SELECT * FROM t1 $t0 LEFT OUTER JOIN t2 $t2 ON $t0.a = $t2.b AND $t0.c <= $t2.d".lower()
     expected = "select * from (select * from t1 $t1) $t1 left outer join (select * from t2 $t2) $t2 on $t1.a = $t2.b and $t1.c <= $t2.d"
     
-    actual = j.generateQuery().lower()
+    actual = j.generateQuery()
+
+    self.matchSnipped(actual, expected)
+  
+  def test_complexWhere(self):
+    df = grizzly.read_table("t1")
+    expr = (df['a'] == df['b']) & (df['c'] <= df['d'])
+    df = df[expr]
+
+    expected = "select * from (select * from t1 $t1) $t2 where $t2.a = $t2.b and $t2.c <= $t2.d"
+    actual = df.generateQuery()
 
     self.matchSnipped(actual, expected)
 
