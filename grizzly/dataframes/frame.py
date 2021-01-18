@@ -570,10 +570,9 @@ class Grouping(DataFrame):
     
 
   def filter(self, expr):
-    
-    # TODO: traverse expression tree and collect all ColRefs and FuncCalls 
-    # update them. 
-    
+    # the expression might contain references to computed columns
+    # update the refs so that these column references are not prefixed
+
     aggColNames = [x[2] for x in self.aggFunc]
 
     cols = []
@@ -581,15 +580,14 @@ class Grouping(DataFrame):
     def visitor(e):
       if isinstance(e, ColRef):
         cols.append(e)
-        e.df = None
-
+        
     ExprTraverser.df(expr, visitor)
 
     isHaving = False
     for c in cols:
-      if c.column in aggColNames:
+      if c.column in aggColNames: # if the referenced column is computed using an aggregate we must add the expression to having
         isHaving = True
-        break
+        c.df = None
 
     if isHaving:
       self.having.append(expr)
