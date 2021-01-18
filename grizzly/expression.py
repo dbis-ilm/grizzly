@@ -1,3 +1,5 @@
+import queue
+
 from enum import Enum
 class ModelType(Enum):
   TORCH = 1
@@ -56,6 +58,8 @@ class FuncCall(Expr):
     self.udf = udf
     self.alias = alias
 
+    super().__init__(None, None, None)
+
   def __str__(self):
     cols = [f"{self.df.alias}.{c.column}" for c in self.inputCols]
     colsStr = ", ".join(cols)
@@ -71,6 +75,8 @@ class ComputedCol(Expr):
     self.colname = newName
     self.value = value
 
+    super().__init__(None, None, None)
+
 class ColRef(Expr):
   def __init__(self, column: str, df, alias: str = ""):
     if not isinstance(column, str):
@@ -78,6 +84,8 @@ class ColRef(Expr):
     self.column = column
     self.alias = alias
     self.df = df
+
+    super().__init__(None, None, None)
 
   def colName(self):
     return self.column
@@ -121,3 +129,35 @@ class Or(Expr):
 
   def __str__(self):
     return f"{self.left} OR {self.right}"
+
+
+class ExprTraverser:
+  @staticmethod
+  def bf(e: Expr, visitorFunc):
+    todo = queue.Queue()
+    todo.put_nowait(e)
+
+    while todo.qsize() > 0:
+      current = todo.get_nowait()
+
+      if current.left:
+        todo.put_nowait(current.left)
+      if current.right:
+        todo.put_nowait(current.right)
+      
+      visitorFunc(current)
+
+  @staticmethod
+  def df(e: Expr, visitorFunc):
+    todo = queue.LifoQueue()
+    todo.put_nowait(e)
+
+    while todo.qsize() > 0:
+      current = todo.get_nowait()
+
+      if current.left and isinstance(current.left, Expr):
+        todo.put_nowait(current.left)
+      if current.right and isinstance(current.right, Expr):
+        todo.put_nowait(current.right)
+      
+      visitorFunc(current)

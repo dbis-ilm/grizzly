@@ -1,4 +1,5 @@
-from grizzly.expression import ComputedCol, Eq, Ne, Ge, Gt, Le, Lt, Expr, ColRef, ComputedCol, FuncCall, ExpressionException
+import queue
+from grizzly.expression import ComputedCol, Eq, Ne, Ge, Gt, Le, Lt, Expr, ColRef, ComputedCol, FuncCall, ExpressionException, ExprTraverser
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
@@ -572,14 +573,28 @@ class Grouping(DataFrame):
     
     # TODO: traverse expression tree and collect all ColRefs and FuncCalls 
     # update them. 
-    if expr.left.column in [x[2] for x in self.aggFunc]:
-      # unset df reference, since this is actually a computed column
-      # otherwise the generator would qualify this with e.g. _t1.
-      # however, the aggregate does not belong to _t1, yet, but rather is 
-      # being computed
-      expr.left.df = None 
+    
+    aggColNames = [x[2] for x in self.aggFunc]
+
+    cols = []
+
+    def visitor(e):
+      if isinstance(e, ColRef):
+        cols.append(e)
+        e.df = None
+
+    ExprTraverser.df(expr, visitor)
+
+    isHaving = False
+    for c in cols:
+      if c.column in aggColNames:
+        isHaving = True
+        break
+
+    if isHaving:
       self.having.append(expr)
-      return self 
+      return self
+    
     
     return super().filter(expr)
 
@@ -621,3 +636,34 @@ class Ordering(DataFrame):
 
     self.by = sortCols
     self.ascending = ascending
+
+
+class Traverser:
+  
+  @staticmethod
+  def bf(df: DataFrame, visitorFunc):
+    todo = queue.Queue()
+    todo.put_nowait(df)
+
+    while todo.qsize() > 0:
+      current = todo.get_nowait()
+
+      for parent in current.parents:
+        todo.put_nowait(parent)
+
+      
+      visitorFunc(current)
+
+  @staticmethod
+  def df(df: DataFrame, visitorFunc):
+    todo = queue.LifoQueue()
+    todo.put_nowait(df)
+
+    while todo.qsize() > 0:
+      current = todo.get_nowait()
+
+      for parent in current.parents:
+        todo.put_nowait(parent)
+      
+      visitorFunc(current)    
+
