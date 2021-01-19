@@ -499,9 +499,9 @@ class DataFrame(object):
     # return tableStr
     
 
-  # def __repr__(self) -> str:
-  #   tableStr = GrizzlyGenerator.table(self)
-  #   return tableStr
+  def __repr__(self) -> str:
+    tableStr = GrizzlyGenerator.table(self)
+    return tableStr
     
 ###########################################################################
 # Concrete DataFrames representing an operation
