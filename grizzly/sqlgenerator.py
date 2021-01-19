@@ -345,6 +345,10 @@ class SQLGenerator:
         opStr = expr.opStr
         
       exprSQL = f"{l} {opStr} {r}"
+      
+      if isinstance(expr, Or):
+        exprSQL = f"({exprSQL})"
+
       pre = lPre + rPre
     # right hand side is some constant (other than string), e.g. number
     else:

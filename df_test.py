@@ -336,6 +336,16 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_parenthisExpr(self):
+    df = grizzly.read_table("t1")
+    expr = (df['a'] == df['b']) & ((df['c'] <= df['d']) | ((df.f > 3) & (df.e != None)))
+    df = df[expr]
+
+    actual = df.generateQuery()
+    expected = "select * from (select * from t1 $t1) $t2 where $t2.a = $t2.b and ($t2.c <= $t2.d or $t2.f > 3 and $t2.e is not NULL)"
+
+    self.matchSnipped(actual, expected)
+
   def test_triJoin(self):
     df1 = grizzly.read_table("t1")
     df2 = grizzly.read_table("t2")
