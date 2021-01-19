@@ -13,7 +13,7 @@ class CodeMatcher(unittest.TestCase):
   
 
   def matchSnipped(self, snipped, template, removeLinebreaks: bool = False):
-    res, mapping, reason = self.doMatchSnipped(snipped.strip(), template.strip(),removeLinebreaks)
+    res, mapping, reason = CodeMatcher.doMatchSnipped(snipped.strip(), template.strip(),removeLinebreaks)
     if not res:
       mapstr = "with mapping:\n"
       for templ,tVar in mapping.items():
@@ -21,9 +21,9 @@ class CodeMatcher(unittest.TestCase):
       self.fail(f"Mismatch\nFound:    {snipped}\nExpected: {template}\nReason:\t{reason}\n{mapstr}")
       
 
-  def doMatchSnipped(self, snipped, template, removeLinebreaks):
-    replacements = {}
-    pattern = re.compile("\$t[0-9]+")
+  @staticmethod
+  def doMatchSnipped(snipped, template, removeLinebreaks):
+    pattern = re.compile(r"\$t[0-9]+")
     pattern2 = re.compile("_t[0-9]+")
 
     placeholders = pattern.findall(template)
@@ -254,7 +254,7 @@ class DataFrameTest(CodeMatcher):
     # expected = "select count($t2.monthyear) as cnt from (select $t1.theyear, $t1.monthyear from (select * from (select * from events $t3) $t0 where $t0.globaleventid = 476829606) $t1 group by $t1.theyear, $t1.monthyear) $t2"
     # self.matchSnipped(actual, expected)
 
-    self.assertEquals(cnt, 1)
+    self.assertEqual(cnt, 1)
 
   def test_groupByAggGroupColCode(self):
     df = grizzly.read_table("events") 
@@ -377,7 +377,6 @@ class DataFrameTest(CodeMatcher):
     expected = "select distinct $t1.isrootevent from (select * from events $t0) $t1"
     
     self.matchSnipped(actual, expected)
-    # self.assertEqual
 
   def test_DistinctTwoCols(self):
     df = grizzly.read_table("events")

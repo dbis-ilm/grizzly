@@ -14,10 +14,10 @@ class ExpressionTest(unittest.TestCase):
 
     andL = expr.left
     self.assertIsInstance(andL.left, ColRef, "left of EQ should be a ColRef")
-    self.assertEquals(andL.left.column, "a", "left of EQ colref should be column a")
+    self.assertEqual(andL.left.column, "a", "left of EQ colref should be column a")
 
     self.assertIsInstance(andL.right, ColRef, "right of EQ should be a ColRef")
-    self.assertEquals(andL.right.column, "b", "right of EQ colref should be column b")
+    self.assertEqual(andL.right.column, "b", "right of EQ colref should be column b")
 
     andR = expr.right
     self.assertIsInstance(andR.left, Le, "left of OR should be a LE")
@@ -25,19 +25,19 @@ class ExpressionTest(unittest.TestCase):
 
     self.assertIsInstance(andR.left.left, ColRef, "left of LE should be a ColRef")
     self.assertIsInstance(andR.left.right, ColRef, "right of LE should be a ColRef")
-    self.assertEquals(andR.left.left.column, "c")
-    self.assertEquals(andR.left.right.column, "d")
+    self.assertEqual(andR.left.left.column, "c")
+    self.assertEqual(andR.left.right.column, "d")
 
     innerAnd = expr.right.right
     self.assertIsInstance(innerAnd.left, Gt)
     self.assertIsInstance(innerAnd.left.left, ColRef)
-    self.assertEquals(innerAnd.left.left.column, "f")
+    self.assertEqual(innerAnd.left.left.column, "f")
     self.assertIsInstance(innerAnd.left.right, int)
-    self.assertEquals(innerAnd.left.right, 3)
+    self.assertEqual(innerAnd.left.right, 3)
 
     self.assertIsInstance(innerAnd.right, Ne)
     self.assertIsInstance(innerAnd.right.left, ColRef)
-    self.assertEquals(innerAnd.right.left.column, "e")
+    self.assertEqual(innerAnd.right.left.column, "e")
     self.assertIsNone(innerAnd.right.right)
 
     
