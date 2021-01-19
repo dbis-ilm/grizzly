@@ -1,3 +1,4 @@
+from grizzly.expression import ExpressionException
 import unittest
 import sqlite3
 
@@ -368,6 +369,13 @@ class DataFrameTest(CodeMatcher):
     expected = "select * from (select * from events $t0) $t1  where $t1.globaleventid = 468189636"
     self.matchSnipped(actual, expected)
 
+  def test_EqNone(self):
+    df = grizzly.read_table("events") 
+    df = df[df['actor1name'] == None]
+    actual = df.generateQuery()
+    expected = "select * from (select * from events $t0) $t1  where $t1.actor1name is NULL"
+    self.matchSnipped(actual, expected)  
+
   def test_Ne(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] != 468189636]
@@ -376,6 +384,14 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+
+  def test_NeNone(self):
+    df = grizzly.read_table("events") 
+    df = df[df['actor1name'] != None]
+    actual = df.generateQuery()
+    expected = "select * from (select * from events $t0) $t1  where $t1.actor1name is not NULL"
+    self.matchSnipped(actual, expected)  
+
   def test_Lt(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] < 468189636]
@@ -383,6 +399,15 @@ class DataFrameTest(CodeMatcher):
     expected = "select * from (select * from events $t0) $t1  where $t1.globaleventid < 468189636"
     self.matchSnipped(actual, expected)
 
+  def test_LtNone(self):
+    df = grizzly.read_table("events") 
+    df = df[df['actor1name'] < None]
+    
+    with self.assertRaises(ExpressionException):
+      df.generateQuery()
+
+    
+    
   def test_Le(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] <= 468189636]

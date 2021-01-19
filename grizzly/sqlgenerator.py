@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import ComputedCol, FuncCall, ColRef, Expr, ModelType, Or, And
+from grizzly.expression import ComputedCol, Eq, ExpressionException, FuncCall, ColRef, Expr, ModelType, Ne, Or, And
 from grizzly.generator import GrizzlyGenerator
 
 from typing import List, Tuple
@@ -296,7 +296,9 @@ class SQLGenerator:
     exprSQL = ""
     pre = []
     # right hand side is a string constant
-    if isinstance(expr, str):
+    if expr is None:
+      exprSQL = "NULL"
+    elif isinstance(expr, str):
       exprSQL = f"'{expr}'"
     # right hand side is a dataframe (i.e. subquery)
     elif isinstance(expr, DataFrame): 
@@ -323,10 +325,26 @@ class SQLGenerator:
       exprSQL = SQLGenerator._getFuncCode(expr.df, expr.inputCols[0],expr.funcName, expr.alias)
 
     elif isinstance(expr, Expr):
+      
       (lPre,l) = SQLGenerator._exprToSQL(expr.left)
-      (rPre,r) = SQLGenerator._exprToSQL(expr.right)
 
-      exprSQL = f"{l} {expr.opStr} {r}"
+      opStr = ""
+      r = ""
+      rPre = []
+      if not expr.right:
+        if isinstance(expr, Eq):
+          opStr = "is"
+        elif isinstance(expr, Ne):
+          opStr = "is not"
+        else:
+          raise ExpressionException(f"Invalid operation {expr.opStr} when right hand side is None! Only == and != are supported")
+
+        r = "NULL"
+      else:
+        (rPre,r) = SQLGenerator._exprToSQL(expr.right)
+        opStr = expr.opStr
+        
+      exprSQL = f"{l} {opStr} {r}"
       pre = lPre + rPre
     # right hand side is some constant (other than string), e.g. number
     else:

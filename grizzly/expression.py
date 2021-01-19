@@ -7,7 +7,8 @@ class ModelType(Enum):
   ONNX = 3
 
 class ExpressionException(Exception):
-  pass
+  def __init__(self, *args: object) -> None:
+      super().__init__(*args)
 
 class Expr(object):
   def __init__(self, left, right, opStr):
