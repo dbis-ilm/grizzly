@@ -454,7 +454,10 @@ class DataFrame(object):
   def count(self, col=None, alias=None):
     colName = "*"
     if col is not None:
-      colName = ColRef(col,self)
+      if isinstance(col, str):
+        colName = ColRef(col,self)
+      else:
+        colName = col
     
     return self._exec_or_add_aggr(colName, AggregateType.COUNT,alias)
 
@@ -556,6 +559,11 @@ class Grouping(DataFrame):
           theRef = ColRef(theCol, None)
         else:
           theRef = ColRef(theCol, self)
+        self.groupCols.append(theRef)
+      
+      elif isinstance(theCol, Projection):
+        theRef = theCol.columns[0]
+        self.updateRef(theRef)
         self.groupCols.append(theRef)
       else:
         theCol.df = self

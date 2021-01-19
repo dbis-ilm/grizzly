@@ -272,9 +272,24 @@ class DataFrameTest(CodeMatcher):
     df = df[df['globaleventid'] == 476829606]
     g = df.groupby(["theyear","monthyear"])
 
-    a = g.count("actor1name", "cnt").collect()
+    a = g.count("actor1name", "cnt")
+    
+       
     # print(f"cnt: {a}")
-    self.assertEquals(len(a),1)
+    self.assertEquals(len(a.collect()),1)
+
+  def test_groupByAggLimit(self):
+    df = grizzly.read_table("events")
+    df1 = df[(df.globaleventid < 470259271) & (df.actor1name != None)]
+    df1 = df1.groupby(df1.actor1name)
+    df1 = df1.count(df1.actor2name, alias="cnt_actor2")
+    df1 = df1[:2]
+    
+    actual = df1.generateQuery()
+
+    expected = "select $t3.* from (select $t2.actor1name, count($t2.actor2name) as cnt_actor2 from (select * from (select * from events $t0) $t1 where $t1.globaleventid < 470259271 and $t1.actor1name is not null) $t2 group by $t2.actor1name) $t3 LIMIT 2"
+
+    self.matchSnipped(actual, expected)
 
   def test_groupByCountGroups(self):
     df = grizzly.read_table("events") 
