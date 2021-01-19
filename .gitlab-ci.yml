@@ -30,7 +30,7 @@ test:
     - grouprunner
   script:
     #python -m unittest
-    pytest --cov=. test.py
+    pytest --cov=. *_test.py
     #- python setup.py test
     #- pip install tox flake8  # you can also use tox
     #- tox -e py36,flake8
