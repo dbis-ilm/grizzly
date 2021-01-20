@@ -337,10 +337,10 @@ class DataFrame(object):
   @staticmethod
   def __expressionUpdateRefs(left, right):
     if not isinstance(left, Projection):
-      raise ExpressionException(f"Must have a projection to access fields, but got {type(self)}")
+      raise ExpressionException(f"Must have a projection to access fields, but got {type(left)}")
     if len(left.columns) != 1:
-      attrsStr = ",".join([str(x) for x in self.columns]) if self.columns else ""
-      raise ExpressionException(f"Projection list must have exactly one column, but is: {len(self.columns)}: [{attrsStr}]")
+      attrsStr = ",".join([str(x) for x in left.columns]) if left.columns else ""
+      raise ExpressionException(f"Projection list must have exactly one column, but is: {len(left.columns)}: [{attrsStr}]")
 
     if isinstance(right, Projection):
       r = right.columns[0]
