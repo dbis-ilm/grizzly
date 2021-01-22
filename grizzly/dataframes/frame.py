@@ -265,6 +265,10 @@ class DataFrame(object):
   ###################################
   # shortcuts
 
+  def __iter__(self):
+    return GrizzlyGenerator.iterator(self)
+
+
   def __getattr__(self, name):
     # if isinstance(self, Projection) or isinstance(self, Grouping):
     #   return ColRef(name, self)

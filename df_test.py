@@ -686,6 +686,16 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_iterate(self):
+    df = grizzly.read_table("events")
+
+    cnt = 0
+    for _ in df:
+      cnt += 1
+
+    expected = df.count()
+
+    self.assertEqual(cnt, expected)
 
   def test_at(self):
     df = grizzly.read_table("events")

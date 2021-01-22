@@ -1,6 +1,4 @@
-from grizzly.expression import ColRef
 from grizzly.sqlgenerator import SQLGenerator
-from grizzly.generator import GrizzlyGenerator
 
 import logging
 
@@ -50,6 +48,12 @@ class RelationalExecutor(object):
       tuples.append(row)
 
     return tuples
+
+  def iterator(self, df):
+    rs = self.execute(df)
+
+    for row in rs:
+      yield row
 
   @staticmethod
   def __getHeader(rs) -> list[str]:
