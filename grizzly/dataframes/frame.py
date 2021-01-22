@@ -7,6 +7,8 @@ from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
 import inspect
 
+from collections import namedtuple
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -262,11 +264,56 @@ class DataFrame(object):
   def map(self, func):
     return self._map(func)
 
+
   ###################################
-  # shortcuts
+  # iteration
 
   def __iter__(self):
     return GrizzlyGenerator.iterator(self)
+
+  def iterrows(self):
+    '''
+    Iterate over DataFrame rows as (index, Array) pairs.
+    '''
+    num = 0
+    for row in self:
+      yield (num, list(row))
+      num += 1
+
+
+  def itertuples(self, name="Grizzly",index=None):
+    '''
+    Iterate over DataFrame rows as namedtuples.
+    '''
+    
+    theIter = GrizzlyGenerator.iterator(self, includeHeader=True)
+
+    headerRow = next(theIter)
+
+    RowType = namedtuple(name, headerRow)
+
+    for row in theIter:
+      yield RowType._make(row)
+
+  def items(self):
+    '''
+    Iterate over (column name, Array) pairs.
+
+    Iterates over the DataFrame columns, returning a tuple with the column name and the content as a Series.
+    '''
+    arr = self.collect(includeHeader=True)
+    header = arr[0]
+    data = arr[1:]
+
+    col = 0
+    for colname in header:
+      columndata = [row[col] for row in data]
+      yield (colname, columndata)
+      col += 1
+
+
+  ###################################
+  # shortcuts
 
 
   def __getattr__(self, name):

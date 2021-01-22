@@ -1,3 +1,4 @@
+from grizzly.generator import GrizzlyGenerator
 from grizzly.sqlgenerator import SQLGenerator
 
 import logging
@@ -49,8 +50,15 @@ class RelationalExecutor(object):
 
     return tuples
 
-  def iterator(self, df):
+  def iterator(self, df, includeHeader):
+    '''
+    Returns an iterator over the result of the DF
+    If includeHeader is true, the first row to be returned are the column names
+    '''
     rs = self.execute(df)
+
+    if includeHeader:
+      yield RelationalExecutor.__getHeader(rs)
 
     for row in rs:
       yield row

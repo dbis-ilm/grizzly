@@ -24,8 +24,8 @@ class GrizzlyGenerator(object):
     return GrizzlyGenerator._backend.collect(df, includeHeader)
 
   @staticmethod
-  def iterator(df):
-     return GrizzlyGenerator._backend.iterator(df)
+  def iterator(df, includeHeader = False):
+     return GrizzlyGenerator._backend.iterator(df, includeHeader)
 
   @staticmethod
   def toString(df, delim=",", pretty=False, maxColWidth=20, limit=20):

@@ -697,6 +697,48 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(cnt, expected)
 
+  def test_iterrows(self):
+    df = grizzly.read_table("events")
+    df = df[[df.actor1name, df.actor2name]]
+    df = df[100:10]
+
+    n = 0
+    for num, row in df.iterrows():
+      self.assertEqual(num, n, "row num")
+      self.assertEqual(len(row), 2)
+      n += 1
+
+    self.assertEqual(n, 10, "total number") # will be increased one more time in last iteration
+
+  def test_itertuples(self):
+    df = grizzly.read_table("events")
+    df = df[[df.actor1name, df.actor2name]]
+    df = df[100:10]
+
+    r = re.compile(r"Grizzly\(actor1name=.+, actor2name=.+\)")
+
+    n = 0
+    for tup in df.itertuples():
+      s = str(tup)
+      self.assertRegexpMatches(s, r)
+      n += 1
+
+    self.assertEqual(n, 10, "total number") # will be increased one more time in last iteration
+
+  def test_items(self):
+    df = grizzly.read_table("events")
+    df = df[[df.actor1name, df.actor2name]]
+    df = df[100:10]
+
+    i = 0
+    names = ["actor1name", "actor2name"]
+    for item in df.items():
+      self.assertEqual(item[0], names[i]) # name column
+      self.assertEqual(len(item[1]),10)
+      i += 1
+
+    self.assertEqual(i, 2) # two columns
+
   def test_at(self):
     df = grizzly.read_table("events")
     res = df.at[2,'actor1name']
