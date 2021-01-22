@@ -1,4 +1,5 @@
 import queue
+from typing import Tuple
 from grizzly.expression import ComputedCol, Eq, Ne, Ge, Gt, Le, Lt, Expr, ColRef, ComputedCol, FuncCall, ExpressionException, ExprTraverser
 from grizzly.generator import GrizzlyGenerator
 from grizzly.aggregates import AggregateType
@@ -399,8 +400,52 @@ class DataFrame(object):
   # Actions
   ###########################################################################
 
+  def info(self, verbose = None, buf=None, max_cols=None, memory_usage=None, show_counts=None, null_counts=None):
+    raise NotImplementedError("This method has not been implemented yet")
+
+  def select_types(include=None, exclude=None):
+    '''
+    Return a subset of the DataFrame’s columns based on the column dtypes.
+    '''
+    raise NotImplementedError("This method has not been implemented yet")
+
+  def values(self):
+    '''
+    Return a Numpy representation of the DataFrame.
+    '''
+    raise NotImplementedError("This method has not been implemented yet")
+
+  def to_numpy(self):
+    '''
+    Return a Numpy representation of the DataFrame.
+    '''
+    raise NotImplementedError("This method has not been implemented yet")
+
   def collect(self, includeHeader = False):
     return GrizzlyGenerator.collect(self, includeHeader)
+
+  # Pandas DF stuff
+
+  @property
+  def at(self):
+    '''
+    Access a value for a row/column label pair. In contrast to Pandas this must not return
+    a single value. If only row number is given, it will return that row. If a column name is given
+    the entire column is returned (all rows). 
+    '''
+    return _Accessor(self)
+
+  @property
+  def loc(self):
+    return _Accessor(self)
+    
+  @property  
+  def iat(self):
+    raise NotImplementedError("getting columns by number is not supported")
+
+  @property
+  def iloc(self):
+    raise NotImplementedError("getting columns by number is not supported")
 
   ###################################
   # aggregation functions
@@ -494,6 +539,9 @@ class DataFrame(object):
 
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
     print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
+
+  def head(self,n=5):
+    self.show(limit=n)
     
   def __str__(self):
     strRep = GrizzlyGenerator.toString(self, pretty=True)
@@ -643,6 +691,45 @@ class Ordering(DataFrame):
     self.by = sortCols
     self.ascending = ascending
 
+class _Accessor:
+
+  def __init__(self, df):
+    self.df = df
+    super().__init__()
+
+  def __getitem__(self, loc):
+
+    row = None
+    col = None
+
+    if isinstance(loc, int): # a row number: OFFSET loc LIMIT 1 
+      row = loc
+    elif isinstance(loc, str): # a column name: Projection
+      col = loc
+    elif isinstance(loc, Projection):
+      col = loc.columns[0].column
+    elif isinstance(loc, Tuple): # row + column
+      if len(loc) != 2:
+        raise ValueError(f"Invalid length of access tuple: {len(loc)}, required: 2")
+
+      row = loc[0]
+      col = loc[1]
+    else:
+      raise ValueError(f"invalid parameter values to at! type: {type(loc)}")
+
+    result = self.df
+    
+    if col:
+      result = result.project([col])
+    
+    if row:
+      result = result.limit(n=1, offset=row)
+
+    return result.collect()
+    
+
+    
+    
 
 class Traverser:
   
