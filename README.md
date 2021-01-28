@@ -49,7 +49,8 @@ In order to activate them, set:
 
 ```python
 from grizzly.relationaldbexecutor import RelationalExecutor
-grizzly.use(RelationalExecutor(con))
+from grizzly.sqlgenerator import SQLGenerator
+grizzly.use(RelationalExecutor(con, SQLGenerator("sqlite")))
 ```
 
 The `RelationalExecutor` constructor has a parameter for the code generator to use. By default this is a `grizzly.sqlgenerator.SQLGenerator`, but can be set to some own implementation.
