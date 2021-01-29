@@ -56,7 +56,9 @@ class DataFrameTest(CodeMatcher):
 
   def setUp(self):
     c = sqlite3.connect("grizzly.db")
-    grizzly.use(RelationalExecutor(c, SQLGenerator("sqlite")))
+    gen = SQLGenerator("sqlite")
+    executor = RelationalExecutor(c, gen)
+    grizzly.use(executor)
 
   def tearDown(self):
     grizzly.close()
@@ -110,7 +112,6 @@ class DataFrameTest(CodeMatcher):
     expected = "select $t1.theyear, $t1.actor1name, count($t1.actor2name) as cnt_actor, min($t1.actor2name) as min_actor from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name"
     actual = g.generateQuery()
 
-    print(actual)
     self.matchSnipped(actual, expected)
 
   def test_HavingTwice(self):
@@ -320,7 +321,7 @@ class DataFrameTest(CodeMatcher):
     j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']) , how="left outer")
 
     # expected = "SELECT * FROM t1 $t0 LEFT OUTER JOIN t2 $t2 ON $t0.a = $t2.b AND $t0.c <= $t2.d".lower()
-    expected = "select * from (select * from t1 $t1) $t1 left outer join (select * from t2 $t2) $t2 on $t1.a = $t2.b and $t1.c <= $t2.d"
+    expected = "select * from (select * from t1 $t1) $t3 left outer join (select * from t2 $t2) $t4 on $t3.a = $t4.b and $t3.c <= $t4.d"
     
     actual = j.generateQuery()
 
@@ -342,7 +343,7 @@ class DataFrameTest(CodeMatcher):
     df = df[expr]
 
     actual = df.generateQuery()
-    expected = "select * from (select * from t1 $t1) $t2 where $t2.a = $t2.b and ($t2.c <= $t2.d or $t2.f > 3 and $t2.e is not NULL)"
+    expected = "select * from (select * from t1 $t1) $t2 where $t2.a = $t2.b and ($t2.c <= $t2.d or ($t2.f > 3 and $t2.e is not NULL))"
 
     self.matchSnipped(actual, expected)
 
@@ -455,6 +456,26 @@ class DataFrameTest(CodeMatcher):
     expected = "select * from (select * from events $t0) $t1  where $t1.globaleventid >= 468189636"
     self.matchSnipped(actual, expected)
 
+  def test_shapeFull(self):
+    df = grizzly.read_table("events") 
+
+    (cols, rows) = df.shape
+
+    self.assertEqual(cols, 58)
+    self.assertEqual(rows, 30354)
+
+  def test_shapeGrp(self):
+    df = grizzly.read_table("events")
+    g = df.groupby(["theyear","actor1name"])
+    a = g.agg(col="actor2name", aggType=AggregateType.COUNT,alias="cnt_actor")
+    f = a.filter(a["cnt_actor"] > 2)
+
+    (cols, rows) = f.shape
+
+    self.assertEqual(cols, 3) # 2 grouping + 1 aggr
+    self.assertEqual(rows, 879)
+
+
   def test_collect(self):
     df = grizzly.read_table("events") 
     arr = df.collect(includeHeader=False)
@@ -514,20 +535,20 @@ class DataFrameTest(CodeMatcher):
     finally:
       sys.stdout = bkp
 
-  def test_toString(self):
-    df = grizzly.read_table("events") 
+  # def test_toString(self):
+  #   df = grizzly.read_table("events") 
 
-    df = df[df['globaleventid'] == 467268277]
-    df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
+  #   df = df[df['globaleventid'] == 467268277]
+  #   df = df[["actor1name","actor2name", "globaleventid","sourceurl"]]
 
-    strDF = str(df)
-    splt = strDF.split("\n")
+  #   strDF = str(df)
+  #   splt = strDF.split("\n")
 
-    rows = df.count()
-    dfLen = len(splt)
-    rowsLen = rows+ 1 # column names
+  #   rows = df.count()
+  #   dfLen = len(splt)
+  #   rowsLen = rows+ 1 # column names
 
-    self.assertEqual(dfLen, rowsLen) 
+  #   self.assertEqual(dfLen, rowsLen) 
 
   def test_ViewJoin(self):
     df1 = grizzly.read_table("t1")
@@ -579,7 +600,7 @@ class DataFrameTest(CodeMatcher):
     j = df1.map(df2)
 
     actual = j.generateQuery()
-    expected = "select * from (select * from events $t0) $t0 natural join (select * from events $t1) $t1"
+    expected = "select * from (select * from events $t0) $t1 natural join (select * from events $t2) $t3"
     self.matchSnipped(actual, expected)
 
   def test_limitgen(self):
@@ -685,6 +706,87 @@ class DataFrameTest(CodeMatcher):
     expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid, $t2.actor1name asc"
 
     self.matchSnipped(actual, expected)
+
+  def test_iterate(self):
+    df = grizzly.read_table("events")
+
+    cnt = 0
+    for _ in df:
+      cnt += 1
+
+    expected = df.count()
+
+    self.assertEqual(cnt, expected)
+
+  def test_iterrows(self):
+    df = grizzly.read_table("events")
+    df = df[[df.actor1name, df.actor2name]]
+    df = df[100:10]
+
+    n = 0
+    for num, row in df.iterrows():
+      self.assertEqual(num, n, "row num")
+      self.assertEqual(len(row), 2)
+      n += 1
+
+    self.assertEqual(n, 10, "total number") # will be increased one more time in last iteration
+
+  def test_itertuples(self):
+    df = grizzly.read_table("events")
+    df = df[[df.actor1name, df.actor2name]]
+    df = df[100:10]
+
+    r = re.compile(r"Grizzly\(actor1name=.+, actor2name=.+\)")
+
+    n = 0
+    for tup in df.itertuples():
+      s = str(tup)
+      self.assertRegexpMatches(s, r)
+      n += 1
+
+    self.assertEqual(n, 10, "total number") # will be increased one more time in last iteration
+
+  def test_items(self):
+    df = grizzly.read_table("events")
+    df = df[[df.actor1name, df.actor2name]]
+    df = df[100:10]
+
+    i = 0
+    names = ["actor1name", "actor2name"]
+    for item in df.items():
+      self.assertEqual(item[0], names[i]) # name column
+      self.assertEqual(len(item[1]),10)
+      i += 1
+
+    self.assertEqual(i, 2) # two columns
+
+  def test_at(self):
+    df = grizzly.read_table("events")
+    res = df.at[2,'actor1name']
+
+    self.assertEqual(len(res), 1)
+    self.assertEqual(len(res[0]), 1)
+
+  def test_atProj(self):
+    df = grizzly.read_table("events")
+    res = df.at[2,df.actor1name]
+
+    self.assertEqual(len(res), 1)
+    self.assertEqual(len(res[0]), 1)
+
+  def test_atColOnly(self):
+    df = grizzly.read_table("events")
+    res = df.at[df.actor1name]
+
+    self.assertEqual(len(res), 30354)
+    self.assertEqual(len(res[0]), 1)
+
+  def test_atRowOnly(self):
+    df = grizzly.read_table("events")
+    res = df.at[17]
+
+    self.assertEqual(len(res), 1)
+    self.assertEqual(len(res[0]), 58)
 
   # def test_predictPytorch(self):
 
