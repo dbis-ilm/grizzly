@@ -190,10 +190,9 @@ class ModelUDF(UDF):
     self.templace_replacement_dict = template_replacement_dict
 
 class FuncCall(Expr):
-  def __init__(self, funcName: str, inputCols: list, df, udf: UDF, alias: str = ""):
+  def __init__(self, funcName: str, inputCols: list, udf: UDF, alias: str = ""):
     self.funcName = funcName
     self.inputCols = inputCols
-    self.df = df
     self.udf = udf
     self.alias = alias
 

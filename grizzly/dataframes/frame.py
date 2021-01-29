@@ -41,7 +41,6 @@ class DataFrame(object):
       x.df = self                                                                                                       
       return x                                                                                                          
     elif isinstance(x, FuncCall):                                                                                       
-      x.df = self
       for ic in x.inputCols:
         self.updateRef(ic)                                                                                                       
       return x                                                                                                          
@@ -144,7 +143,7 @@ class DataFrame(object):
       # returns = DataFrame._mapTypes(returns)
 
       udf = UDF(funcName, params, lines, returns)
-      call = FuncCall(funcName, self.columns, self, udf)
+      call = FuncCall(funcName, self.columns, udf)
 
       # return self.project([call])
       return call
@@ -211,7 +210,7 @@ class DataFrame(object):
     template_replacement_dict["$$modelclassname$$"] = clazz.__name__
     template_replacement_dict["$$modelclassdef$$"] = clazzCode
     udf = ModelUDF(funcName, params, predictedType, ModelType.TORCH, template_replacement_dict)
-    call = FuncCall(funcName, self.columns + [n_predictions] , self,udf, f"predicted_{attrsString}")
+    call = FuncCall(funcName, self.columns + [n_predictions] , udf, f"predicted_{attrsString}")
 
     return self.project([call])
 
@@ -246,7 +245,7 @@ class DataFrame(object):
     template_replacement_dict["$$tensor_to_output_func_name$$"] = tensor_to_output.__name__
 
     udf = ModelUDF(funcName, params, returntype, ModelType.ONNX, template_replacement_dict)
-    call = FuncCall(funcName, self.columns, self, udf, f"predicted_{attrsString}")
+    call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
 
     return self.project([call])
 
@@ -265,7 +264,7 @@ class DataFrame(object):
     template_replacement_dict["$$constants$$"] = f"[{','.join(str(item) for item in constants)}]"
 
     udf = ModelUDF(funcName, params, returntype, ModelType.TF, template_replacement_dict)
-    call = FuncCall(funcName, self.columns, self, udf, f"predicted_{attrsString}")
+    call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
 
     return self.project([call])
 
@@ -341,6 +340,7 @@ class DataFrame(object):
       if isinstance(value, FuncCall):
         value.alias = key
         newCol = value
+        self.updateRef(value)
       else:
         newCol = ComputedCol(value, key)
 
@@ -490,7 +490,7 @@ class DataFrame(object):
 
     (number of columns, number of rows)
     '''
-    f = self.project(FuncCall("count", ["*"], self, None, "rowcount"))
+    f = self.project(FuncCall("count", ["*"], None, "rowcount"))
     cc = ComputedCol(f, None)
     shapeDF = self.project(['*', cc])
     shapeDF = shapeDF.limit(1)
@@ -553,7 +553,7 @@ class DataFrame(object):
     if isinstance(col,str):
       col = ColRef(col, self)
 
-    f = FuncCall(aggType, [col], self, None, alias)
+    f = FuncCall(aggType, [col], None, alias)
 
     if isinstance(self, Grouping):
       if not col.column in [c.column for c in self.groupCols]:
@@ -587,17 +587,17 @@ class DataFrame(object):
 
   def min(self, col=None,alias=None):
     theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MIN, theCol, self, None, alias)
+    f = FuncCall(AggregateType.MIN, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
   def max(self, col=None, alias=None):
     theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MAX, theCol, self, None, alias)
+    f = FuncCall(AggregateType.MAX, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
   def mean(self, col=None,alias=None):
     theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MEAN, theCol, self, None, alias)
+    f = FuncCall(AggregateType.MEAN, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
   def count(self, col=None, alias=None):
@@ -605,12 +605,12 @@ class DataFrame(object):
     if theCol is None:
       theCol = "*"
 
-    f = FuncCall(AggregateType.COUNT, theCol, self, None, alias)
+    f = FuncCall(AggregateType.COUNT, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
   def sum(self , col, alias = None):
     theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.SUM, theCol, self, None, alias)
+    f = FuncCall(AggregateType.SUM, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
 
@@ -631,16 +631,16 @@ class DataFrame(object):
   def head(self,n=5):
     self.show(limit=n)
     
-  def __str__(self):
-    strRep = GrizzlyGenerator.toString(self, pretty=True)
-    return strRep
+  # def __str__(self):
+  #   strRep = GrizzlyGenerator.toString(self, pretty=True)
+  #   return strRep
     # tableStr = GrizzlyGenerator.table(self)
     # return tableStr
     
 
-  def __repr__(self) -> str:
-    tableStr = GrizzlyGenerator.table(self)
-    return tableStr
+  # def __repr__(self) -> str:
+  #   tableStr = GrizzlyGenerator.table(self)
+  #   return tableStr
     
 ###########################################################################
 # Concrete DataFrames representing an operation
@@ -679,14 +679,7 @@ class Projection(DataFrame):
     for col in columns:
       theCol = self.updateRef(col)
       theCols.append(theCol)
-      # if isinstance(col, str):
-      #   theCols.append(ColRef(col, self))
-      # elif isinstance(col, ColRef):
       
-      #   updated = self.updateRef(col)
-      #   theCols.append(updated)
-      # else:
-      #   theCols.append(col)
     columns = theCols
 
     super().__init__(columns, parent,GrizzlyGenerator._incrAndGetTupleVar())
@@ -710,16 +703,15 @@ class Grouping(DataFrame):
           theRef = ColRef(theCol, None)
         else:
           theRef = ColRef(theCol, self)
-        self.groupCols.append(theRef)
-      
-      # elif isinstance(theCol, Projection):
-      #   theRef = theCol.columns[0]
-      #   self.updateRef(theRef)
-      #   self.groupCols.append(theRef)
+        theCol = theRef
+      elif isinstance(theCol, ColRef):
+        self.updateRef(theCol)
       elif isinstance(theCol, Expr):
-        self.groupCols.append(theCol)
+        pass
       else: 
         raise ExpressionException(f"invalid grouping column type: {type(theCol)}")
+
+      self.groupCols.append(theCol)
     
     self.aggFunc = []
 
