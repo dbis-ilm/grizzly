@@ -24,6 +24,7 @@ Grizzly uses
 - Python 3
 - [SQLite3](https://docs.python.org/2/library/sqlite3.html) (currently for tests only)
 - [BeautifulTable](https://github.com/pri22296/beautifultable) for pretty output
+- [PyYAML](https://pypi.org/project/PyYAML/) for support of vendor-specific query templates
 
 ## Getting started
 
