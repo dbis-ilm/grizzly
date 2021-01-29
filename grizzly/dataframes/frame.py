@@ -1,7 +1,7 @@
 from grizzly.aggregates import AggregateType
 import queue
 from typing import Tuple
-from grizzly.expression import BinaryExpression, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser
+from grizzly.expression import BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
@@ -343,7 +343,7 @@ class DataFrame(object):
         newCol = value
       else:
         newCol = ComputedCol(value, key)
-        
+
       self.computedCols.append(newCol)
     else: # not am expr or DF -> must be a constant
       newCol = ComputedCol(Constant(value), key)
@@ -365,7 +365,7 @@ class DataFrame(object):
     elif theType is ColRef : # if in the projection list e.g. "df.a" was given
       return self.project(key)
 
-    elif isinstance(key, Expr): # e.g. a filter expression
+    elif isinstance(key, BoolExpr) or isinstance(key, LogicExpr): # e.g. a filter expression
       return self.filter(key)
 
     elif theType is str: # a single string is given -> project to that column
@@ -491,11 +491,10 @@ class DataFrame(object):
     (number of columns, number of rows)
     '''
     f = self.project(FuncCall("count", ["*"], self, None, "rowcount"))
-    cc = ComputedCol(f, "total_cnt")
+    cc = ComputedCol(f, None)
     shapeDF = self.project(['*', cc])
     shapeDF = shapeDF.limit(1)
 
-    # print(shapeDF.generateQuery())
 
     resultRow = GrizzlyGenerator.fetchone(shapeDF)
 

@@ -92,17 +92,14 @@ class Query:
         rQry = Query(self.generator)
         (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
 
+        lAlias = df.leftParent().alias
+        rAlias = df.rightParent().alias
+
         if isinstance(df.on, ColRef):
-          lAlias = df.leftParent().alias
-          rAlias = df.rightParent().alias
           (exprPre, onSQL) = self.generator._exprToSQL(df.on)
           onSQL = f"USING ({onSQL})"
           preCode += exprPre
         elif isinstance(df.on, LogicExpr) or isinstance(df.on, BoolExpr):
-          # lAlias = df.on.left.df.alias
-          # rAlias = df.on.right.df.alias
-          lAlias = GrizzlyGenerator._incrAndGetTupleVar()
-          rAlias = GrizzlyGenerator._incrAndGetTupleVar()
           (exprPre, onSQL) = self.generator._exprToSQL(df.on)
           onSQL = "ON " + onSQL
           preCode += exprPre
@@ -114,20 +111,12 @@ class Query:
           (lOnPre,lOn) = self.generator._exprToSQL(df.on[0])
           (rOnPre,rOn) = self.generator._exprToSQL(df.on[1])
 
-          lAlias = GrizzlyGenerator._incrAndGetTupleVar()
-          rAlias = GrizzlyGenerator._incrAndGetTupleVar()
-          # onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
-
           onSQL = f"ON {lOn} {df.comp} {rOn}"
           preCode += lOnPre
           preCode += rOnPre
         else:
-          lAlias = GrizzlyGenerator._incrAndGetTupleVar()
-          rAlias = GrizzlyGenerator._incrAndGetTupleVar()
           onSQL = "" # let the DB figure it out itself
 
-        # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
-        # self.joins.append(joinSQL)
         proj = "*"
         if computedCols:
           proj += ","+computedCols
@@ -331,8 +320,13 @@ class SQLGenerator:
       (lPre,l) = self._exprToSQL(expr.left)
       (rPre,r) = self._exprToSQL(expr.right)
 
+      if isinstance(expr.left, LogicExpr):
+        l = f"({l})"
+      if isinstance(expr.right, LogicExpr):
+        r = f"({r})"
+
       if expr.operand == LogicOperation.AND:
-        exprSQL = f"({l}) and ({r})"
+        exprSQL = f"{l} and {r}"
       elif expr.operand == LogicOperation.OR:
         exprSQL = f"{l} or {r}"
       elif expr.operand == LogicOperation.NOT:

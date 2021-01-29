@@ -162,11 +162,11 @@ class Param:
     self.name = name
     self.type = type
 
-  def __str__(self):
-    return f"{self.name}:{self.type}"
+  # def __str__(self):
+  #   return f"{self.name}:{self.type}"
 
 class ComputedCol(object):
-  def __init__(self, value, alias):
+  def __init__(self, value, alias = None):
     self.value = value
     self.alias = alias
     super().__init__()
@@ -199,15 +199,15 @@ class FuncCall(Expr):
 
     super().__init__()
 
-  def __str__(self):
-    cols = [f"{self.df.alias}.{c.column}" for c in self.inputCols]
-    colsStr = ", ".join(cols)
-    s = f"{self.funcName}({colsStr})"
+  # def __str__(self):
+  #   cols = [f"{self.df.alias}.{c.column}" for c in self.inputCols]
+  #   colsStr = ", ".join(cols)
+  #   s = f"{self.funcName}({colsStr})"
 
-    if self.alias != "":
-      s += f" as {self.alias}"
+  #   if self.alias != "":
+  #     s += f" as {self.alias}"
     
-    return s
+  #   return s
 
 class ColRef(Expr):
   def __init__(self, column: str, df, alias: str = ""):
@@ -232,7 +232,7 @@ class ColRef(Expr):
       return super().__getattribute__(name)
     except:
       # if it does not exist, it might be a DF operation -> try to execute this
-      p = self.df.project(self)
+      p = self.df.project(self.column)
       return p.__getattribute__(name)
 
   def __getitem__(self, expr):
@@ -242,7 +242,7 @@ class ColRef(Expr):
       else:
         return self
     else:
-      p = self.df.project(self)
+      p = self.df.project(self.column)
       return p[expr] # use __getitem__ of DataFrame
 
 class ExprTraverser:
