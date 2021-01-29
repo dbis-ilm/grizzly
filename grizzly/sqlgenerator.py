@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import ComputedCol, Eq, ExpressionException, FuncCall, ColRef, Expr, ModelType, Ne, Or, And
+from grizzly.expression import ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation
 from grizzly.generator import GrizzlyGenerator
 
 from typing import List, Tuple
@@ -23,12 +23,11 @@ class Query:
       preCode = []
 
       for x in df.computedCols:
-        (exprPre, exprSQL) = SQLGenerator._exprToSQL(x)
+        (exprPre, exprSQL) = self.generator._exprToSQL(x)
         preCode += exprPre
         computedCols.append(exprSQL)
 
       computedCols = ",".join(computedCols)
-      preCode = [self.generator.generateCreateFunc(call.udf) for call in df.computedCols if isinstance(call, FuncCall)]
 
       if isinstance(df,Table):
         proj = "*"
@@ -43,17 +42,22 @@ class Query:
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + SQLGenerator._generateCreateExtTable(df), f"SELECT {proj} FROM {df.table} {df.alias}")
+        tablePre = SQLGenerator._generateCreateExtTable(df, self.generator.templates)
+        qry = f"SELECT {proj} FROM {df.table} {df.alias}"
+
+        return (preCode + tablePre, qry)
 
       elif isinstance(df,Projection):
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-
         prefixed = "*"
         if df.columns:
           prefixed = []
-          for (ePre, exprSQL) in [SQLGenerator._exprToSQL(attr) for attr in df.columns]:
+
+          for attr in df.columns:
+            (ePre, exprSQL) = self.generator._exprToSQL(attr)
+
             pre += ePre
             prefixed.append(exprSQL)
           
@@ -61,20 +65,24 @@ class Query:
 
         if computedCols:
           prefixed += ","+computedCols
+
+        qry = f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}"
         
-        return (preCode + pre, f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}")
+        return (preCode + pre, qry)
 
       elif isinstance(df,Filter):
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        (exprPre,exprStr) = SQLGenerator._exprToSQL(df.expr)
+        (exprPre,exprStr) = self.generator._exprToSQL(df.expr)
 
         proj = "*"
         if computedCols:
           proj += ","+computedCols
 
-        return (preCode + pre + exprPre, f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}")
+        qry = f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}"
+
+        return (preCode + pre + exprPre, qry)
 
       elif isinstance(df, Join):
 
@@ -84,27 +92,39 @@ class Query:
         rQry = Query(self.generator)
         (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
 
-        if isinstance(df.on, Or) or isinstance(df.on, And):
+        if isinstance(df.on, ColRef):
           lAlias = df.leftParent().alias
           rAlias = df.rightParent().alias
-          (exprPre, onSQL) = SQLGenerator._exprToSQL(df.on)
-          onSQL = "ON " + onSQL
-          rpre += exprPre
-        elif isinstance(df.on, Expr):
-          # use the alias from the already built join condition
-          lAlias = df.on.left.df.alias
-          rAlias = df.on.right.df.alias
-          (exprPre, onSQL) = SQLGenerator._exprToSQL(df.on)
-          onSQL = "ON " + onSQL
-          rpre += exprPre
-        elif isinstance(df.on, list):
+          (exprPre, onSQL) = self.generator._exprToSQL(df.on)
+          onSQL = f"USING ({onSQL})"
+          preCode += exprPre
+        elif isinstance(df.on, LogicExpr) or isinstance(df.on, BoolExpr):
+          # lAlias = df.on.left.df.alias
+          # rAlias = df.on.right.df.alias
           lAlias = GrizzlyGenerator._incrAndGetTupleVar()
           rAlias = GrizzlyGenerator._incrAndGetTupleVar()
-          onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
+          (exprPre, onSQL) = self.generator._exprToSQL(df.on)
+          onSQL = "ON " + onSQL
+          preCode += exprPre
+        elif isinstance(df.on, list):
+
+          if len(df.on) != 2:
+            raise ExpressionException("on condition must consist of exacltly two columns")
+
+          (lOnPre,lOn) = self.generator._exprToSQL(df.on[0])
+          (rOnPre,rOn) = self.generator._exprToSQL(df.on[1])
+
+          lAlias = GrizzlyGenerator._incrAndGetTupleVar()
+          rAlias = GrizzlyGenerator._incrAndGetTupleVar()
+          # onSQL = f"ON {lAlias}.{df.on[0]} {df.comp} {rAlias}.{df.on[1]}"
+
+          onSQL = f"ON {lOn} {df.comp} {rOn}"
+          preCode += lOnPre
+          preCode += rOnPre
         else:
-          lAlias = df.leftParent().alias
-          rAlias = df.rightParent().alias
-          onSQL = ""
+          lAlias = GrizzlyGenerator._incrAndGetTupleVar()
+          rAlias = GrizzlyGenerator._incrAndGetTupleVar()
+          onSQL = "" # let the DB figure it out itself
 
         # joinSQL = f"{df.how} JOIN {rightSQL} {rtVar} {onSQL}"
         # self.joins.append(joinSQL)
@@ -122,25 +142,24 @@ class Query:
 
         byCols = []
         for attr in df.groupCols:
-          (exprPre, exprSQL) = SQLGenerator._exprToSQL(attr)
+          (exprPre, exprSQL) = self.generator._exprToSQL(attr)
           pre += exprPre
           byCols.append(exprSQL)
 
         by = ",".join(byCols)
 
-        # by = ",".join([SQLGenerator._exprToSQL(attr) for attr in df.groupCols])
-
         funcCode = ""
-        for (func, col, alias) in df.aggFunc:
-          # a = f" as {alias}" if alias else ""
-          funcCode += ", " + SQLGenerator._getFuncCode(df, col, func, alias)
+        for f in df.aggFunc:
+          (fPre,fCode) = self.generator._generateFuncCall(f)
+          pre += fPre
+          funcCode += ", " + fCode
         
         groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {by}"
 
         havings = []
         if df.having:
           for h in df.having:
-            (hPre,hSQL) = SQLGenerator._exprToSQL(h)
+            (hPre,hSQL) = self.generator._exprToSQL(h)
             pre += hPre
             havings.append(hSQL)
 
@@ -161,7 +180,7 @@ class Query:
         subQry = Query(self.generator)
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
-        limitClause = SQLGenerator.templates["limit"].lower()
+        limitClause = self.generator.templates["limit"].lower()
         limitSQL = None
         if limitClause == "top":
           limitSQL = f"SELECT TOP {df.limit} {df.alias}.* FROM ({parentSQL}) {df.alias}"
@@ -182,7 +201,7 @@ class Query:
 
         by = []
         for attr in df.by:
-          (exprPre, exprSQL) = SQLGenerator._exprToSQL(attr)
+          (exprPre, exprSQL) = self.generator._exprToSQL(attr)
           pre += exprPre
           by.append(exprSQL)
 
@@ -261,15 +280,12 @@ SqlBigInt = NewType("bigint", int)
 
 class SQLGenerator:
 
-  def __init__(self, profile: str = None):
-      super().__init__()
-      SQLGenerator.init(profile)
 
-  @staticmethod
-  def init(profile):
-    # self.profile = profile
-    SQLGenerator.templates = Config.loadProfile(profile)
-    # self.cnt = 0
+  def __init__(self, profile: str = None):
+    self.profile = profile
+    self.templates = Config.loadProfile(profile)
+    super().__init__()
+
   
   @staticmethod
   def _unindent(lines: list) -> list:
@@ -291,21 +307,97 @@ class SQLGenerator:
     else: 
       return pythonType
 
-  @staticmethod
-  def _exprToSQL(expr) -> Tuple[list[str], str]:
+  def _exprToSQL(self, expr) -> Tuple[list[str], str]:
     exprSQL = ""
     pre = []
+
     # right hand side is a string constant
     if expr is None:
       exprSQL = "NULL"
-    elif isinstance(expr, str):
-      exprSQL = f"'{expr}'"
-    # right hand side is a dataframe (i.e. subquery)
+
+    elif isinstance(expr,str):
+      exprSQL = expr # TODO: currently to handle *, but maybe this should done earlier and be converted into a special ColRef?
+    
+    # we were given a constant
+    elif isinstance(expr, Constant):
+      if isinstance(expr.value, str):
+        exprSQL = f"'{expr.value}'"
+      else:
+        exprSQL = f"{expr.value}"
+
+    # TODO: should LogicExpr be merged into BoolExpr ? 
+    elif isinstance(expr, LogicExpr):
+
+      (lPre,l) = self._exprToSQL(expr.left)
+      (rPre,r) = self._exprToSQL(expr.right)
+
+      if expr.operand == LogicOperation.AND:
+        exprSQL = f"({l}) and ({r})"
+      elif expr.operand == LogicOperation.OR:
+        exprSQL = f"{l} or {r}"
+      elif expr.operand == LogicOperation.NOT:
+        exprSQL = f"not {l}"
+      elif expr.operand == LogicOperation.XOR:
+        exprSQL = f"{l} xor {r}"
+      else:
+        raise ExpressionException(f"unknown logical operation: {expr.operand}")
+
+      pre = lPre + rPre
+
+    elif isinstance(expr, BoolExpr):
+      
+      if not expr.right and not (expr.operand == BooleanOperation.EQ or expr.operand == BooleanOperation.NE):
+        raise ExpressionException("only == and != allowed for comparison with None (NULL)")
+          
+      (lPre,l) = self._exprToSQL(expr.left)
+      (rPre,r) = self._exprToSQL(expr.right)
+        
+      opStr = None
+      if expr.operand == BooleanOperation.EQ:
+        opStr = "=" if expr.right is not None else "is"
+      elif expr.operand == BooleanOperation.NE:
+        opStr = "<>" if expr.right is not None else "is not"
+      elif expr.operand == BooleanOperation.GE:
+        opStr = ">=" 
+      elif expr.operand == BooleanOperation.GT:
+        opStr = ">"
+      elif expr.operand == BooleanOperation.LE:
+        opStr = "<="
+      elif expr.operand == BooleanOperation.LT:
+        opStr = "<"
+      else: 
+        raise ExpressionException(f"unknown boolean operation: {expr.operand}")
+
+      exprSQL = f"{l} {opStr} {r}"
+      pre = lPre + rPre
+
+    elif isinstance(expr, ArithmExpr):
+      (lPre,l) = self._exprToSQL(expr.left)
+      (rPre,r) = self._exprToSQL(expr.right)
+
+      opStr = None
+      if expr.operand == ArithmeticOperation.ADD:
+        opStr = "+"
+      elif expr.operand == ArithmeticOperation.SUB:
+        opStr = "-"
+      elif expr.operand == ArithmeticOperation.MUL:
+        opStr = "*"
+      elif expr.operand == ArithmeticOperation.DIV:
+        opStr = "/"
+      elif expr.operand == ArithmeticOperation.MOD:
+        opStr = "%"
+      
+      exprSQL = f"{l} {opStr} {r}"
+      pre = lPre + rPre
+
+    # if the thing to produce is a DataFrame, we probably have a subquery
     elif isinstance(expr, DataFrame): 
       # if right hand side is a DataFrame, we need to create code first 
-      subQry = Query(SQLGenerator())
+      subQry = Query(self)
       (pre,exprSQL) = subQry._buildFrom(expr)
+      
 
+    # it's a plain column reference  
     elif isinstance(expr, ColRef):
       if expr.df and expr.column != "*":
         exprSQL = f"{expr.df.alias}.{expr.column}"
@@ -315,55 +407,34 @@ class SQLGenerator:
       if expr.alias:
         exprSQL += f" as {expr.alias}"
 
+    # it's a computed column, the value could be anything
     elif isinstance(expr, ComputedCol):
-      (pre,exprSQL) = SQLGenerator._exprToSQL(expr.value)
-      exprSQL += f" as {expr.colname}"      
+      (pre, exprSQL) = self._exprToSQL(expr.value)
 
-    elif isinstance(expr, FuncCall):
-      if expr.udf:
-        pre = [SQLGenerator.generateCreateFunc(expr.udf)]
-      exprSQL = SQLGenerator._getFuncCode(expr.df, expr.inputCols[0],expr.funcName, expr.alias)
-
-    elif isinstance(expr, Expr):
-      
-      (lPre,l) = SQLGenerator._exprToSQL(expr.left)
-
-      opStr = ""
-      r = ""
-      rPre = []
-      if not expr.right:
-        if isinstance(expr, Eq):
-          opStr = "is"
-        elif isinstance(expr, Ne):
-          opStr = "is not"
-        else:
-          raise ExpressionException(f"Invalid operation {expr.opStr} when right hand side is None! Only == and != are supported")
-
-        r = "NULL"
-      else:
-        (rPre,r) = SQLGenerator._exprToSQL(expr.right)
-        opStr = expr.opStr
-        
-      exprSQL = f"{l} {opStr} {r}"
-      
-      if isinstance(expr, Or):
+      if not isinstance(expr.value, FuncCall):
         exprSQL = f"({exprSQL})"
 
-      pre = lPre + rPre
-    # right hand side is some constant (other than string), e.g. number
+        if expr.alias:
+          exprSQL = f"{exprSQL} as {expr.alias}"      
+
+    # it's a function call -> produce CREATE func if necessary and call
+    elif isinstance(expr, FuncCall):
+
+      (pre,exprSQL) = self._generateFuncCall(expr)
+      
+    # seems to be something we forgot above or unknown to us. raise an exception  
     else:
-      exprSQL = str(expr)
+      raise ExpressionException(f"don't know how to handle {expr}")
 
     return (pre,exprSQL)
 
-
   @staticmethod
-  def generateCreateFunc(udf: UDF) -> str:
+  def _generateCreateFunc(udf: UDF, templates) -> str:
     paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
     returnType = SQLGenerator._mapTypes(udf.returnType)
 
     if isinstance(udf, ModelUDF):
-      lines = SQLGenerator.templates[udf.modelType.name + "_code"]
+      lines = templates[udf.modelType.name + "_code"]
       for key, value in udf.templace_replacement_dict.items():
         lines = lines.replace(key, str(value))
 
@@ -372,7 +443,7 @@ class SQLGenerator:
       lines = SQLGenerator._unindent(lines)
       lines = "".join(lines)
 
-    template = SQLGenerator.templates["createfunction"]
+    template = templates["createfunction"]
     code = template.replace("$$name$$", udf.name)\
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\
@@ -380,7 +451,44 @@ class SQLGenerator:
     return code
 
   @staticmethod
-  def _generateCreateExtTable(tab: ExternalTable) -> List[str]:
+  def _getSQLFuncName(aggType) -> str:
+    if isinstance(aggType, str):
+      return aggType
+
+    if isinstance(aggType, AggregateType):
+      if aggType == AggregateType.MEAN:
+        return "avg"
+
+      return str(aggType)[len("AggregateType."):].lower()
+
+    # if we get here it's not a string and not a AggType --> error
+    raise ExpressionException(f"invalid function value: {aggType}, expected string or AggregateType, but got {type(aggType)}")
+
+  def _generateFuncCall(self, f: FuncCall):
+    if f.udf:
+      pre = [SQLGenerator._generateCreateFunc(f.udf, self.templates)]
+    else:
+      pre = []
+
+    cols = []
+    for col in f.inputCols:
+      (p,c) = self._exprToSQL(col)
+      pre += p
+      cols.append(c)
+
+    inCols = ",".join(cols)
+
+    fName = SQLGenerator._getSQLFuncName(f.funcName)
+
+    funcCode = f"{fName}({inCols})"
+
+    if f.alias is not None:
+      funcCode += f" as {f.alias}"
+
+    return (pre,funcCode)
+
+  @staticmethod
+  def _generateCreateExtTable(tab: ExternalTable, templates) -> List[str]:
     queries = []
 
     # In place string replacement
@@ -398,7 +506,7 @@ class SQLGenerator:
       options.append(f"'schema'='{schemaString}'")
     optionString = f""", OPTIONS=({",".join(options)})"""
 
-    template = SQLGenerator.templates["externaltable"]
+    template = templates["externaltable"]
     code = template.replace("$$name$$", tab.table)\
       .replace("$$schema$$", schemaString)\
       .replace("$$filenames$$", tab.filenames)\
@@ -409,30 +517,8 @@ class SQLGenerator:
     queries.append(code)
     return queries
 
-  @staticmethod
-  def _getFuncCode(df, col, func, alias = None) -> str:
-    if not isinstance(col, ColRef) and col != "*":
-      colName = ColRef(col, df)
-    else:
-      colName = col
-    (_,colName) = SQLGenerator._exprToSQL(colName)
-
-
-    if func == AggregateType.MEAN:
-      funcStr = "avg"
-    elif str(func).lower().startswith("aggregatetype."):
-      funcStr = str(func).lower()[len("aggregatetype."):]
-    else:
-      funcStr = func
-
-    funcCode = f"{funcStr}({colName})"
-
-    if alias is not None:
-      funcCode += f" as {alias}"
-
-    return funcCode
-
-  def _generateAggCode(self, df, col, func, alias) -> Tuple[List[str],str]:
+  
+  def _generateAggCode(self, df, f) -> Tuple[List[str],str]:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
@@ -440,15 +526,15 @@ class SQLGenerator:
     if df.parents:
       (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
-      funcCode = SQLGenerator._getFuncCode(df, col, func, alias)
+      (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
       
     else:
-      funcCode = SQLGenerator._getFuncCode(df, col, func)
+      (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
       pre = []
 
-    return (pre, aggSQL)
+    return (pre+fPre, aggSQL)
 
   def generate(self, df) -> Tuple[List[str],str]:
     qry = Query(self)

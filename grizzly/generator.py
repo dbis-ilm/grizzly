@@ -24,6 +24,10 @@ class GrizzlyGenerator(object):
     return GrizzlyGenerator._backend.collect(df, includeHeader)
 
   @staticmethod
+  def fetchone(df):
+    return GrizzlyGenerator._backend.fetchone(df)
+
+  @staticmethod
   def iterator(df, includeHeader = False):
      return GrizzlyGenerator._backend.iterator(df, includeHeader)
 
@@ -52,9 +56,9 @@ class GrizzlyGenerator(object):
 
     
   @staticmethod
-  def aggregate(df, col, func, alias):
-    return GrizzlyGenerator._backend._execAgg(df, col, func,alias)
+  def aggregate(df, f):
+    return GrizzlyGenerator._backend._execAgg(df, f)
 
   @staticmethod
-  def _gen_aggregate(df, col, func):
-    return GrizzlyGenerator._backend._gen_agg(df, col, func)
+  def _gen_aggregate(df, func):
+    return GrizzlyGenerator._backend._gen_agg(df, func)

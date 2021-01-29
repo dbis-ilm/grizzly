@@ -1,8 +1,8 @@
+from grizzly.aggregates import AggregateType
 import queue
 from typing import Tuple
-from grizzly.expression import ComputedCol, Eq, Ne, Ge, Gt, Le, Lt, Expr, ColRef, ComputedCol, FuncCall, ExpressionException, ExprTraverser
+from grizzly.expression import BinaryExpression, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser
 from grizzly.generator import GrizzlyGenerator
-from grizzly.aggregates import AggregateType
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
 import inspect
@@ -47,12 +47,14 @@ class DataFrame(object):
       return x                                                                                                          
     elif isinstance(x, str): # if only a string was given as column name                                                
       ref = ColRef(x, self)                                                                                             
-      return ref                                                                                                        
-    elif isinstance(x, Expr):
+      return ref   
+    elif isinstance(x, BinaryExpression):
       if x.left:                                                                                           
         x.left = self.updateRef(x.left) if isinstance(x.left, Expr) else x.left                                           
       if x.right:
         x.right = self.updateRef(x.right) if isinstance(x.right, Expr) else x.right
+      return x
+    else:
       return x
 
   def hasColumn(self, colName):
@@ -68,11 +70,8 @@ class DataFrame(object):
   def filter(self, expr):
     return Filter(expr, self)
 
-  def project(self, cols):
-    if not isinstance(cols, list):
-      cols = [cols]
-
-    return Projection(cols, self)
+  def project(self, cols, distinct = False):
+    return Projection(cols, self, doDistinct=distinct)
 
   def distinct(self):
     if isinstance(self, Projection):
@@ -85,11 +84,19 @@ class DataFrame(object):
 
     if isinstance(on, list):
       
+      lOn = None
+      rOn = None
       from grizzly.expression import ExpressionException
       if not self.hasColumn(on[0]):
         raise ExpressionException(f"No such column {on[0]} for join in left hand side")
+      else:
+        lOn = ColRef(on[0], self)
       if not other.hasColumn(on[1]):
         raise ExpressionException(f"No such column {on[1]} for join in right hand side")
+      else:
+        rOn = ColRef(on[1], other)
+
+      on = [lOn, rOn]
 
     return Join(self, other, on, how, comp)
 
@@ -139,7 +146,8 @@ class DataFrame(object):
       udf = UDF(funcName, params, lines, returns)
       call = FuncCall(funcName, self.columns, self, udf)
 
-      return self.project([call])
+      # return self.project([call])
+      return call
 
     elif isinstance(func, DataFrame):
       return self.join(func, on = None, how = "natural")
@@ -317,27 +325,29 @@ class DataFrame(object):
 
 
   def __getattr__(self, name):
-    # if isinstance(self, Projection) or isinstance(self, Grouping):
-    #   return ColRef(name, self)
-    # else:
-    return Projection([ColRef(name, self)],self)
+    return ColRef(name, self)
+
 
   # magic function for write access by index: []
   def __setitem__(self, key, value):
-    if isinstance(value, Projection):
-      value.columns[0].alias = key
-      newCol = value.parents[0].parents[0].updateRef(value.columns[0])
-      self.computedCols += [newCol]
-    elif isinstance(value, Grouping):
+    
+    if isinstance(value, Grouping):
       #get the last added agg func and set its alias name
-      (lastFuncType, lastFuncCol, _) = value.aggFunc[len(value.aggFunc)-1]
-      d = (lastFuncType, lastFuncCol, key)
-      value.aggFunc = value.aggFunc[:-1]
-      value.aggFunc.append(d)
-    else:
-      newCol = ColRef(value, self, key)
-      self.computedCols += [newCol]
-    # self.computedCols.append(ComputedCol(key,value))
+      f = value.aggFunc[-1]
+      f.alias = key
+    
+    elif isinstance(value, Expr) or isinstance(value, DataFrame):
+      
+      if isinstance(value, FuncCall):
+        value.alias = key
+        newCol = value
+      else:
+        newCol = ComputedCol(value, key)
+        
+      self.computedCols.append(newCol)
+    else: # not am expr or DF -> must be a constant
+      newCol = ComputedCol(Constant(value), key)
+      self.computedCols.append(newCol)
 
   # magic function for read access by index: []
   def __getitem__(self, key):
@@ -352,15 +362,15 @@ class DataFrame(object):
       offset = key.start if key.start is not None else -1
       return self.limit(n, offset)
 
-    if isinstance(key, Expr): # e.g. a filter expression
-      # print(f"filter col: {key}")
+    elif theType is ColRef : # if in the projection list e.g. "df.a" was given
+      return self.project(key)
+
+    elif isinstance(key, Expr): # e.g. a filter expression
       return self.filter(key)
+
     elif theType is str: # a single string is given -> project to that column
-      return self.project(ColRef(key,None))
-      # c = 
-      # return Projection([ColRef(key, self)],self)
-    elif theType is Projection: # if in the projection list e.g. "df.a" was given
-      return self.project([key.columns[0]])
+      return ColRef(key,self)
+
     elif theType is list:
       
       projList = []
@@ -368,15 +378,11 @@ class DataFrame(object):
         t = type(e)
         if t is str:
           projList.append(ColRef(e, self))
-        elif t is Projection:
-          assert(len(e.columns) == 1)
-          c = e.columns[0]
-          projList.append(c)
         elif t is ColRef:
           c = ColRef(e.colName(), self)
           projList.append(c)
         else:
-          raise ExpressionException(f"expected a column name string or projection, but got {e}")
+          raise ExpressionException(f"expected a column name string or column reference, but got {e}")
 
       return self.project(projList)
     else:
@@ -386,66 +392,66 @@ class DataFrame(object):
   ###################################
   # Comparison expressions
 
-  @staticmethod
-  def __expressionUpdateRefs(left, right):
-    if not isinstance(left, Projection):
-      raise ExpressionException(f"Must have a projection to access fields, but got {type(left)}")
-    if len(left.columns) != 1:
-      attrsStr = ",".join([str(x) for x in left.columns]) if left.columns else ""
-      raise ExpressionException(f"Projection list must have exactly one column, but is: {len(left.columns)}: [{attrsStr}]")
+  # @staticmethod
+  # def __expressionUpdateRefs(left, right):
+  #   if not isinstance(left, Projection):
+  #     raise ExpressionException(f"Must have a projection to access fields, but got {type(left)}")
+  #   if len(left.columns) != 1:
+  #     attrsStr = ",".join([str(x) for x in left.columns]) if left.columns else ""
+  #     raise ExpressionException(f"Projection list must have exactly one column, but is: {len(left.columns)}: [{attrsStr}]")
 
-    if isinstance(right, Projection):
-      r = right.columns[0]
-      if len(right.parents) > 0:
-        # we have a projection in an expression to reference a variable only
-        # thus, we want to update to the original DF in order to have the correct
-        # qualifier, instead of the one created for the projection
-        right.parents[0].updateRef(r)
-      else:
-        print("a projection without a parent should not happen... is your script correct?")
-    else:
-      r = right
+  #   if isinstance(right, Projection):
+  #     r = right.columns[0]
+  #     if len(right.parents) > 0:
+  #       # we have a projection in an expression to reference a variable only
+  #       # thus, we want to update to the original DF in order to have the correct
+  #       # qualifier, instead of the one created for the projection
+  #       right.parents[0].updateRef(r)
+  #     else:
+  #       print("a projection without a parent should not happen... is your script correct?")
+  #   else:
+  #     r = right
 
-    # we know we are a projection. Update the projection-ref to our parent
-    left.parents[0].updateRef(left.columns[0])
+  #   # we know we are a projection. Update the projection-ref to our parent
+  #   left.parents[0].updateRef(left.columns[0])
 
-    return r
+  #   return r
 
-  def __eq__(self, other):
-    r = DataFrame.__expressionUpdateRefs(self, other)
+  # def __eq__(self, other):
+  #   r = DataFrame.__expressionUpdateRefs(self, other)
 
-    expr = Eq(self.columns[0], r)
-    return expr
+  #   expr = BoolExpr(self.columns[0], r)
+  #   return expr
 
-  def __gt__(self, other):
-    r = DataFrame.__expressionUpdateRefs(self, other)
+  # def __gt__(self, other):
+  #   r = DataFrame.__expressionUpdateRefs(self, other)
 
-    expr = Gt(self.columns[0], r)
-    return expr
+  #   expr = Gt(self.columns[0], r)
+  #   return expr
 
-  def __lt__(self, other):
-    r = DataFrame.__expressionUpdateRefs(self, other)
+  # def __lt__(self, other):
+  #   r = DataFrame.__expressionUpdateRefs(self, other)
 
-    expr = Lt(self.columns[0], r)
-    return expr
+  #   expr = Lt(self.columns[0], r)
+  #   return expr
 
-  def __ge__(self, other):
-    r = DataFrame.__expressionUpdateRefs(self, other)
+  # def __ge__(self, other):
+  #   r = DataFrame.__expressionUpdateRefs(self, other)
 
-    expr = Ge(self.columns[0], r)
-    return expr
+  #   expr = Ge(self.columns[0], r)
+  #   return expr
   
-  def __le__(self, other):
-    r = DataFrame.__expressionUpdateRefs(self, other)
+  # def __le__(self, other):
+  #   r = DataFrame.__expressionUpdateRefs(self, other)
 
-    expr = Le(self.columns[0], r)
-    return expr
+  #   expr = Le(self.columns[0], r)
+  #   return expr
 
-  def __ne__(self, other):
-    r = DataFrame.__expressionUpdateRefs(self, other)
+  # def __ne__(self, other):
+  #   r = DataFrame.__expressionUpdateRefs(self, other)
 
-    expr = Ne(self.columns[0], r)
-    return expr
+  #   expr = Ne(self.columns[0], r)
+  #   return expr
 
   ###########################################################################
   # Actions
@@ -478,6 +484,27 @@ class DataFrame(object):
   # Pandas DF stuff
 
   @property
+  def shape(self):
+    '''
+    Return a tuple representing the dimensionality of the DataFrame.
+
+    (number of columns, number of rows)
+    '''
+    f = self.project(FuncCall("count", ["*"], self, None, "rowcount"))
+    cc = ComputedCol(f, "total_cnt")
+    shapeDF = self.project(['*', cc])
+    shapeDF = shapeDF.limit(1)
+
+    # print(shapeDF.generateQuery())
+
+    resultRow = GrizzlyGenerator.fetchone(shapeDF)
+
+    numCols = len(resultRow) - 1 # -1 because of added count
+    numRows = resultRow[-1] # last row would be the row count
+
+    return (numCols, numRows)
+
+  @property
   def at(self):
     '''
     Access a value for a row/column label pair. In contrast to Pandas this must not return
@@ -501,7 +528,7 @@ class DataFrame(object):
   ###################################
   # aggregation functions
 
-  def _exec_or_add_aggr(self, col, aggFunc, alias: str):
+  def _exec_or_add_aggr(self, f: FuncCall):
     """
     Adaption to the nested query generation. If there is a grouping in the
     operator tree, the aggregation becomes a transformation. However, it must not
@@ -509,73 +536,84 @@ class DataFrame(object):
     If there is no grouping, the aggregation is an action, so execute the query.
     """
 
-    if isinstance(col, Projection):
-      assert(len(col.columns) == 1)
-      col = self.updateRef(col.columns[0])
+    # if isinstance(col, Projection):
+    #   assert(len(col.columns) == 1)
+    #   col = self.updateRef(col.columns[0])
 
-    if isinstance(self, Grouping) and aggFunc and not col.column in [c.column for c in self.groupCols]:
-      self._addAggFunc(aggFunc, col, alias)
+
+    # if we are a grouping  and the function is not applied on a grouping column
+    # then add the aggregation to the list...
+    if isinstance(self, Grouping) and len([1 for fCol in f.inputCols for groupCol in self.groupCols if fCol.column == groupCol.column]) == 0:
+      self._addAggFunc(f)
       return self
 
-    return GrizzlyGenerator.aggregate(self, col, aggFunc,alias)
+    # otherwise execute f as an action
+    return GrizzlyGenerator.aggregate(self, f)
 
   def agg(self, aggType, col, alias = None):
-    # self.aggFunc.append((aggType, col, alias))
     if isinstance(col,str):
       col = ColRef(col, self)
 
+    f = FuncCall(aggType, [col], self, None, alias)
+
     if isinstance(self, Grouping):
       if not col.column in [c.column for c in self.groupCols]:
-        self._addAggFunc(aggType, col, alias)
+        
+        self._addAggFunc(f)
         return self
       else: 
-        func = FuncCall(aggType,[col],self,None,alias)
-        p = Projection([func], self)
+        p = Projection([f], self)
         return p
     
 
+  @staticmethod
+  def _getFuncCallCol(df, col):
+    '''
+    guarantees to return a list of things to apply a method on
+    or None if input col is None
+    '''
+    if col is None:
+      return None
+    elif isinstance(col, str):
+      return [ColRef(col, df)]
+    elif isinstance(col, Expr):
+      return [col]
+    elif isinstance(col, list):
+      return col
+    elif isinstance(col, DataFrame):
+      return [col]
+    else: 
+      return [Constant(col)]
+
 
   def min(self, col=None,alias=None):
-    # return self._execAgg("min",col)
-    return self._exec_or_add_aggr(col, AggregateType.MIN, alias)
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.MIN, theCol, self, None, alias)
+    return self._exec_or_add_aggr(f)
 
   def max(self, col=None, alias=None):
-    # return self._execAgg("max",col)
-    return self._exec_or_add_aggr(col, AggregateType.MAX, alias)
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.MAX, theCol, self, None, alias)
+    return self._exec_or_add_aggr(f)
 
   def mean(self, col=None,alias=None):
-    # return self._execAgg('avg',col)
-    return self._exec_or_add_aggr(col, AggregateType.MEAN, alias)
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.MEAN, theCol, self, None, alias)
+    return self._exec_or_add_aggr(f)
 
   def count(self, col=None, alias=None):
-    colName = "*"
-    if col is not None:
-      if isinstance(col, str):
-        colName = ColRef(col,self)
-      else:
-        colName = col
-    
-    return self._exec_or_add_aggr(colName, AggregateType.COUNT,alias)
+    theCol = DataFrame._getFuncCallCol(self, col)
+    if theCol is None:
+      theCol = "*"
+
+    f = FuncCall(AggregateType.COUNT, theCol, self, None, alias)
+    return self._exec_or_add_aggr(f)
 
   def sum(self , col, alias = None):
-    # return GrizzlyGenerator.aggregate(self, col, AggregateType.SUM)
-    return self._exec_or_add_aggr(col, AggregateType.SUM, alias)
-    # return self._execAgg("sum", col)
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.SUM, theCol, self, None, alias)
+    return self._exec_or_add_aggr(f)
 
-
-  def _hasGrouping(self):
-    curr = self
-    while curr is not None:
-      if isinstance(curr, Grouping):
-        return curr
-
-      # FIXME: how to handle join paths?
-      if curr.parents is not None:
-        curr = curr.parents[0]
-      else:
-        curr = None
-
-    return None
 
   ###################################
   # show functions
@@ -628,14 +666,29 @@ class ExternalTable(DataFrame):
 
 class Projection(DataFrame):
 
-  def __init__(self, columns:list[ColRef], parent: DataFrame, doDistinct = False):
+  def __init__(self, columns, parent: DataFrame, doDistinct = False):
    
     self.doDistinct = doDistinct
     
-    if columns and parent:
-      columns = [self.updateRef(x) for x in columns] if not isinstance(columns,str) else [ColRef(columns, self)]
-    else:
+    if columns is None:
       columns = []
+    elif not isinstance(columns, list):
+      columns = [columns]
+
+    # update references to all columns
+    theCols = []
+    for col in columns:
+      theCol = self.updateRef(col)
+      theCols.append(theCol)
+      # if isinstance(col, str):
+      #   theCols.append(ColRef(col, self))
+      # elif isinstance(col, ColRef):
+      
+      #   updated = self.updateRef(col)
+      #   theCols.append(updated)
+      # else:
+      #   theCols.append(col)
+    columns = theCols
 
     super().__init__(columns, parent,GrizzlyGenerator._incrAndGetTupleVar())
 
@@ -647,7 +700,7 @@ class Filter(DataFrame):
 
 class Grouping(DataFrame):
 
-  def __init__(self, groupCols, parent):
+  def __init__(self, groupCols: list, parent: DataFrame):
     self.having = []
     self.groupCols = []
     computedAliases = [c.alias for c in parent.computedCols]
@@ -660,27 +713,28 @@ class Grouping(DataFrame):
           theRef = ColRef(theCol, self)
         self.groupCols.append(theRef)
       
-      elif isinstance(theCol, Projection):
-        theRef = theCol.columns[0]
-        self.updateRef(theRef)
-        self.groupCols.append(theRef)
-      else:
-        theCol.df = self
+      # elif isinstance(theCol, Projection):
+      #   theRef = theCol.columns[0]
+      #   self.updateRef(theRef)
+      #   self.groupCols.append(theRef)
+      elif isinstance(theCol, Expr):
         self.groupCols.append(theCol)
+      else: 
+        raise ExpressionException(f"invalid grouping column type: {type(theCol)}")
     
     self.aggFunc = []
 
     super().__init__(self.groupCols, parent, GrizzlyGenerator._incrAndGetTupleVar())
 
-  def _addAggFunc(self,func, col, alias):
-    self.aggFunc.append((func,col, alias))
+  def _addAggFunc(self,funcCall: FuncCall):
+    self.aggFunc.append(funcCall)
     
 
   def filter(self, expr):
     # the expression might contain references to computed columns
     # update the refs so that these column references are not prefixed
 
-    aggColNames = [x[2] for x in self.aggFunc]
+    aggColNames = [x.alias for x in self.aggFunc]
 
     cols = []
 
@@ -742,6 +796,10 @@ class Ordering(DataFrame):
     self.by = sortCols
     self.ascending = ascending
 
+
+#########################
+# helpers
+
 class _Accessor:
 
   def __init__(self, df):
@@ -757,8 +815,8 @@ class _Accessor:
       row = loc
     elif isinstance(loc, str): # a column name: Projection
       col = loc
-    elif isinstance(loc, Projection):
-      col = loc.columns[0].column
+    elif isinstance(loc, ColRef):
+      col = loc.column
     elif isinstance(loc, Tuple): # row + column
       if len(loc) != 2:
         raise ValueError(f"Invalid length of access tuple: {len(loc)}, required: 2")
@@ -777,10 +835,6 @@ class _Accessor:
       result = result.limit(n=1, offset=row)
 
     return result.collect()
-    
-
-    
-    
 
 class Traverser:
   

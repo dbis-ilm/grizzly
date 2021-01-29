@@ -8,9 +8,9 @@ logger = logging.getLogger(__name__)
 class RelationalExecutor(object):
   
   def __init__(self, connection, queryGenerator=SQLGenerator()):
-    super().__init__()
     self.connection = connection
     self.queryGenerator = queryGenerator
+    super().__init__()
 
   def generate(self, df):
     return self.queryGenerator.generate(df)
@@ -35,6 +35,10 @@ class RelationalExecutor(object):
 
   def close(self):
     self.connection.close()
+
+  def fetchone(self, df):
+    rs = self.execute(df)
+    return rs.fetchone()
 
   def collect(self, df, includeHeader):
     rs = self.execute(df)
@@ -161,30 +165,18 @@ class RelationalExecutor(object):
     # print(sql)
     return self._execute(sql)
 
-  def _execAgg(self, df, col, func, alias):
-    """
-    Actually compute the aggregation function.
-
-    If we have a GROUP BY operation, the aggregation is only stored
-    as a transformation and needs to be executed using show() or similar.
-
-    If no grouping exists, we want to compute the aggregate over the complete
-    table and return the scalar result directly
-    """
-
-    return self._doExecAgg(df, col, func, alias)
-
-  def _gen_agg(self, df, col, func):
-    return self.queryGenerator._generateAggCode(df, col, func)
-
-  def _doExecAgg(self, df, col, func, alias):
+  def _execAgg(self, df, f):
     """
     Really executes the aggregation and returns the single result
     """
-    (pre, aggQry) = self.queryGenerator._generateAggCode(df, col, func, alias)
+    (pre, aggQry) = self.queryGenerator._generateAggCode(df, f)
     for pq in pre:
       self._execute(pq).close()
     # execute an SQL query and get the result set
     rs = self._execute(aggQry)
     #fetch first (and only) row, return first column only
     return rs.fetchone()[0]  
+
+  def _gen_agg(self, df, func):
+    return self.queryGenerator._generateAggCode(df, func)
+
