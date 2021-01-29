@@ -513,6 +513,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("events")
     df = df.sort_values("globaleventid")
     tl = df.tail(10)
+    print(tl)
 
     self.assertEqual(len(tl), 10)
 
@@ -793,6 +794,40 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(len(res), 1)
     self.assertEqual(len(res[0]), 58)
+
+  def test_locInt(self):
+    df = grizzly.read_table("events", index="globaleventid")
+    res = df.loc[467268277].collect()
+
+    self.assertEqual(len(res), 1)
+    self.assertEqual(len(res[0]), 58)
+
+
+  def test_locIntNoIndex(self):
+    df = grizzly.read_table("events", index=None)
+ 
+    with self.assertRaises(ValueError):
+      df.loc[467268277].collect()
+
+
+  def test_locListGen(self):
+    df = grizzly.read_table("events", index="globaleventid")
+    df = df.loc[[467268277,477265011]]
+
+    actual = df.generateQuery()
+    expected = "select * from (select * from events $t0) $t1 WHERE $t1.globaleventid in (467268277,477265011)"    
+
+    self.matchSnipped(actual, expected)
+
+  def test_locList(self):
+    df = grizzly.read_table("events", index="globaleventid")
+    df = df.loc[[467268277,477265011]]
+
+    res = df.collect()    
+
+    self.assertEqual(len(res), 2)
+    self.assertEqual(len(res[0]), 58)
+    self.assertEqual(len(res[1]), 58)
 
   # def test_predictPytorch(self):
 

@@ -1,7 +1,7 @@
 from grizzly.aggregates import AggregateType
 import queue
 from typing import Tuple
-from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
+from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, BooleanOperation, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 
 class DataFrame(object):
 
-  def __init__(self, columns, parents, alias: str = ""):
+  def __init__(self, columns, parents, alias: str = "", index=None):
     super(DataFrame, self).__init__()
+
+    self.index = index
 
     if not columns:
       self.columns = []
@@ -393,69 +395,6 @@ class DataFrame(object):
       print(f"{key} has type {theType} -- ignoring")
       return self
 
-  ###################################
-  # Comparison expressions
-
-  # @staticmethod
-  # def __expressionUpdateRefs(left, right):
-  #   if not isinstance(left, Projection):
-  #     raise ExpressionException(f"Must have a projection to access fields, but got {type(left)}")
-  #   if len(left.columns) != 1:
-  #     attrsStr = ",".join([str(x) for x in left.columns]) if left.columns else ""
-  #     raise ExpressionException(f"Projection list must have exactly one column, but is: {len(left.columns)}: [{attrsStr}]")
-
-  #   if isinstance(right, Projection):
-  #     r = right.columns[0]
-  #     if len(right.parents) > 0:
-  #       # we have a projection in an expression to reference a variable only
-  #       # thus, we want to update to the original DF in order to have the correct
-  #       # qualifier, instead of the one created for the projection
-  #       right.parents[0].updateRef(r)
-  #     else:
-  #       print("a projection without a parent should not happen... is your script correct?")
-  #   else:
-  #     r = right
-
-  #   # we know we are a projection. Update the projection-ref to our parent
-  #   left.parents[0].updateRef(left.columns[0])
-
-  #   return r
-
-  # def __eq__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = BoolExpr(self.columns[0], r)
-  #   return expr
-
-  # def __gt__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Gt(self.columns[0], r)
-  #   return expr
-
-  # def __lt__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Lt(self.columns[0], r)
-  #   return expr
-
-  # def __ge__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Ge(self.columns[0], r)
-  #   return expr
-  
-  # def __le__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Le(self.columns[0], r)
-  #   return expr
-
-  # def __ne__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Ne(self.columns[0], r)
-  #   return expr
 
   ###########################################################################
   # Actions
@@ -518,7 +457,7 @@ class DataFrame(object):
 
   @property
   def loc(self):
-    return _Accessor(self)
+    return _IndexAccessor(self)
     
   @property  
   def iat(self):
@@ -526,7 +465,7 @@ class DataFrame(object):
 
   @property
   def iloc(self):
-    raise NotImplementedError("getting columns by number is not supported")
+    return _Accessor(self)
 
   ###################################
   # aggregation functions
@@ -663,10 +602,14 @@ class DataFrame(object):
 
 
 class Table(DataFrame):
-  def __init__(self, table):
+  def __init__(self, table, index, schema):
     self.table = table
     alias = GrizzlyGenerator._incrAndGetTupleVar()
-    super().__init__([], None, alias)
+
+    if index and not (isinstance(index, str) or isinstance(index, list)):
+      raise ValueError("index definition must be a string or list of strings")
+
+    super().__init__([], None, alias, index)
 
 class ExternalTable(DataFrame):
   def __init__(self, file, colDefs, hasHeader, delimiter, format):
@@ -806,6 +749,30 @@ class Ordering(DataFrame):
 
 #########################
 # helpers
+
+class _IndexAccessor:
+  def __init__(self, df):
+    self.df = df
+    super(_IndexAccessor, self).__init__()
+
+  def __getitem__(self, loc):
+
+    indexCol = ColRef(self.df.index, self.df)
+      
+    if isinstance(loc, list):
+      l = [Constant(x) for x in loc]
+      expr = SetExpr(indexCol, Constant(l), SetOperation.IN)
+    elif isinstance(loc, Tuple):
+      row = loc[0]
+      col = loc[1]
+
+      expr = None
+
+    else:
+      #treat as constant
+      expr = BoolExpr(indexCol, Constant(loc), BooleanOperation.EQ)
+
+    return self.df.filter(expr)
 
 class _Accessor:
 

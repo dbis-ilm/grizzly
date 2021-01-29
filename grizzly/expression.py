@@ -28,6 +28,9 @@ class LogicOperation(Enum):
   NOT = 3
   XOR = 4
 
+class SetOperation(Enum):
+  IN = 1
+
 class ExpressionException(Exception):
   def __init__(self, *args: object):
       super().__init__(*args)
@@ -156,6 +159,10 @@ class BoolExpr(BinaryExpression):
 class LogicExpr(BinaryExpression):
   def __init__(self, left: Expr, right: Expr, operand: LogicOperation):
     super().__init__(left, right, operand)
+
+class SetExpr(BinaryExpression):
+  def __init__(self, left: Expr, right: Expr, operand: SetOperation):
+      super().__init__(left, right, operand)
 
 class Param:
   def __init__(self, name: str, type: str):
