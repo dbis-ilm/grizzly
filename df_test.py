@@ -509,6 +509,12 @@ class DataFrameTest(CodeMatcher):
     finally:
       sys.stdout = bkp
 
+  def test_tail(self):
+    df = grizzly.read_table("events")
+    df = df.sort_values("globaleventid")
+    tl = df.tail(10)
+
+    self.assertEqual(len(tl), 10)
 
   def test_showPretty(self):
     df = grizzly.read_table("events") 
