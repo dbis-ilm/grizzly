@@ -9,6 +9,16 @@ Grizzly implements its own `DataFrame` structure that tracks operations, like pr
 Only when the result of the sequence of operations is needed, a SQL string is produced, resembling all those operations, and sent to a DBMS.
 This way, you don't have to care about Out-of-Memory problems, un-optimized queries, and high CPU load.
 
+## Publications
+We presented the idea as well as key concepts at several conferences:
+
+ - Stefan Hagedorn: [**When sweet and cute isn't enough anymore: Solving scalability issues in Python Pandas with Grizzly.**](http://cidrdb.org/cidr2020/gongshow2020/gongshow/abstracts/cidr2020_abstract76.pdf), *CIDR 2020*
+ - Stefan Hagedorn, Steffen Kläbe, Kai-Uwe Sattler: [**Putting Pandas in a Box**](http://cidrdb.org/cidr2021/papers/cidr2021_paper07.pdf), *CIDR 2021*
+   - [Presentation on Youtube](https://www.youtube.com/watch?v=8zUszpr0300)
+ - Steffen Kläbe, Stefan Hagedorn: **When Bears get Machine Support: Applying Machine Learning Models to Scalable DataFrames with Grizzly**, *BTW 2021*, **TO APPEAR**
+ - Stefan Hagedorn, Steffen Kläbe, Kai-Uwe Sattler: **Conquering a Panda’s weaker self - Fighting laziness with laziness**, *EDBT 2021*, Demo Paper, **TO APPEAR**
+
+
 ## Installation
 
 Grizzly is available on PyPi: <https://pypi.org/project/grizzly-sql>
@@ -56,6 +66,8 @@ grizzly.use(RelationalExecutor(con, SQLGenerator("sqlite")))
 
 The `RelationalExecutor` constructor has a parameter for the code generator to use. By default this is a `grizzly.sqlgenerator.SQLGenerator`, but can be set to some own implementation.
 
+The parameter to `SQLGenerator` defines the SQL dialect of the underlying database system. We store vendor-specific code in a configuration file `grizzly.yml`. The dialect is only needed for `limit` operation which some SQL engines implement as `LIMIT` whereas others have `TOP`. Also UDFs (see below) require system-specific code.
+
 Now, reference the table(s) you want to work with:
 
 ```python
@@ -81,6 +93,9 @@ Operations are similar to Pandas:
 df[df["globaleventid"] == 470747760] # filter
 df = df[["actor1name","actor2name"]] #projection
 ```
+
+A column can also be referenced using the dot notation, e.g. `df.actor1name`.
+
 
 ### Joins
 
@@ -110,8 +125,8 @@ This results in the following SQL code:
 
 ```sql
 SELECT * 
-FROM t1 _t0 
-    left outer JOIN t2 _t1 ON _t0.actor1name = _t1.actor2name or _t0.actor1countrycode <= _t1.actor2countrycode
+FROM (SELECT * FROM t1 _t0) _t1  
+    left outer JOIN (SELECT * FROM t2 _t2) _t3 ON _t1.actor1name = _t3.actor2name or _t1.actor1countrycode <= _t3.actor2countrycode
 ```
 
 ### Grouping & Aggregation
@@ -126,7 +141,7 @@ g = df.groupby(["year","actor1name"])
 a = g.agg(col="actor2name", aggType=AggregateTyoe.COUNT)
 ```
 
-Here, `a` represents a DataFrame with three columns: `year`, `monthyear` and the `count` value. In the above example, `a.generate()` will give
+Here, `a` represents a DataFrame with three columns: `year`, `monthyear` and the `count` value. In the above example, `a.generateQuery()` will give
 
 ```sql
 SELECT _t0.year, _t0.actor1name, count(_t0.actor2name)
@@ -139,10 +154,10 @@ If no aggregation function and projection is used, only the grouping columns are
 You can apply aggregation functions on non-grouped `DataFrame`s of course. In this case the aggregates will be computed for the whole content. For example, `g.count()` immediately runs the following query and returns the scalar value
 ```sql
 SELECT count(*) FROM (
-    SELECT _t0.year, _t0.actor1name
-    FROM events _t0 
-    GROUP BY _t0.year, _t0.actor1name
-    ) _t1
+    SELECT _t1.year, _t1.actor1name
+    FROM (SELECT * FROM events _t0) _t1
+    GROUP BY _t1.year, _t1.actor1name
+    ) _t2
 ```
 
 A `df.count()` (i.e. before the grouping) for the above piece of code will return the single scalar value with the number of records in `df` (22225).
@@ -153,15 +168,61 @@ SELECT count(*)
 FROM events
 ```
 
-Note, currently Grizzly supports predefined aggregations only. They are defined as constants in the `AggregateType` class: `MIN`, `MAX`, `MEAN`, `SUM`, `COUNT`. 
-We are working on adding support for (arbitrary) user-defined functions (see below).
+Grizzly supports predefined aggregations, defined in the `AggregateType` enum: `MIN`, `MAX`, `MEAN`, `SUM`, `COUNT`. 
+Other functions can be applied by passing the name of the functions as a string instead of the `ENUM` value.
+
+### User Defined Functions & Computed Columns
+Grizzly allows to apply almost any function defined in Python on your data. Currently, we support scala functions only.
+
+```Python
+def myfunc(a: int) -> str:
+      return a+"_grizzly"
+    
+df = grizzly.read_table("events")  # load table
+df = df[df.globaleventid == 467268277] # filter it
+df["newid"] = df["globaleventid"].map(myfunc) # apply myfunc
+```
+
+In the example above, the function `myfunc` is applied to all entries in the `globaleventid` column and the result is stored in a new column `newid`. 
+
+This way new columns can be added to the result. The value of a computed column can be any expression.
+
+```Python
+df["newcol"] = df.theyear + df.monthyear
+```
+
+### Apply Machine Learning Models
+Using the UDF mechanism described above, we enable users to easily apply their pre-trained models to their data inside the DB. 
+
+For ONNX models, users only need to specify the path to the model file (must be availble for the database engine) as well as two conversion functions: 
+  - first functions converts the tuple into the format expected by the model
+  - the second function converts the output of the model into a format the DB (and user) can handle. 
+
+The [ONNX model zoo](https://github.com/onnx/models) provides a rich set of models with the according conversion functions.
+
+```Python
+def input_to_model(a: str):
+        ...
+
+def model_to_output(a) -> str:
+        ...
+
+df = grizzly.read_table('tab') # load table
+# apply model to every value in column 'col'
+# using provided input and output conversion functions
+# store model output in computed column 'classification'
+df['classification'] = df['col'].apply_model("/path/to/model", input_to_model, model_to_output)
+# group by e.g. predicted classes
+df = df.groupby(['classification']).count()
+df.show()
+```
 
 ### SQL
 
-You can inspect the produced query string (in this case SQL) with `generate()`:
+You can inspect the produced query string (in this case SQL) with `generateQuery()`:
 
-```python
-print(df.generate())
+```Python
+print(df.generateQuery())
 ```
 
 
@@ -172,12 +233,14 @@ print(df.generate())
 - join
 - group by
 - aggregation functions: min, max, mean (avg), count, sum
+- user defined functions
+- apply TensorFlow, PyTorch, ONNX models
 
 ## Limitations
 
- - Currently, only the few operations above are supported -- more is to come
+ - Our DataFrame implementation is not yet fully compatibile with Pandas, but we are working on it.
  - Grizzly is under active development and things might change.
- - There are certainly some bugs. Probably with complex queries
+ - There are certainly some bugs. Probably with complex queries.
 
 
 # Vision
