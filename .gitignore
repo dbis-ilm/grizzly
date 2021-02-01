@@ -3,7 +3,6 @@
 # Edit at https://www.gitignore.io/?templates=code,python
 
 
-eval_*.py
 *_example.py
 setupdb.sql
 
