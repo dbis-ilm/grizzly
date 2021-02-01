@@ -847,33 +847,33 @@ class DataFrameTest(CodeMatcher):
     GrizzlyGenerator._backend.queryGenerator = newGen
 
     try:
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False)
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False, format="csv")
       actual = df.generateQuery()
-      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-                "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float') " \
+                "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'='|','header'='false','schema'='a int, b VARCHAR(1024), c float') " \
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True)
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, format="csv")
       actual = df.generateQuery()
-      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-                "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'='|') " \
+                "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'='|') " \
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',')
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', format="csv")
       actual = df.generateQuery()
-      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
-                "USING SPARK WITH REFERENCE='filename.csv', OPTIONS=('delimiter'=',') " \
+                "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=',') " \
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', "csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', format="csv")
       actual = df.generateQuery()
-      expected = "DROP TABLE IF EXISTS temp_ext_table$t0;" \
+      expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
                 "USING SPARK WITH REFERENCE='filename.csv', FORMAT='csv', OPTIONS=('delimiter'=',') " \
                 "SELECT * FROM temp_ext_table$t0 $t0"
@@ -881,5 +881,55 @@ class DataFrameTest(CodeMatcher):
     finally:
       GrizzlyGenerator._backend.queryGenerator = oldGen
 
+  def test_computedColML(self):
+
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend.queryGenerator
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
+
+    def input_to_tensor(input:str):
+      return input
+
+    def tensor_to_output(tensor) -> str:
+      return "positiv"
+
+    try:
+      onnx_path = "/var/lib/postgresql/roberta-sequence-classification.onnx"
+      df = grizzly.read_table("reviews_SIZE")
+      df["sentiment"] = df["review"].apply_onnx_model(onnx_path, input_to_tensor, tensor_to_output)
+      df = df.groupby(["sentiment"]).count("review")
+      
+      # df.show(pretty = True)
+
+      actual = df.generateQuery()
+      expected = """CREATE OR REPLACE FUNCTION apply(input varchar(1024)) RETURNS varchar(1024) LANGUAGE plpython3u AS 'import onnxruntime
+import random
+def apply(input: str) -> str:
+      def input_to_tensor(input:str):
+      return input
+
+
+      def tensor_to_output(tensor) -> str:
+      return "positiv"
+
+
+  def apply_model(input):
+    if not hasattr(random, "onnx_session"):
+        random.onnx_session = onnxruntime.InferenceSession("/var/lib/postgresql/roberta-sequence-classification.onnx")
+    inputs = input_to_tensor(input)
+    ret = random.onnx_session.run(None, inputs)
+    return(tensor_to_output(ret))
+  return apply_model(input)
+return apply(input)
+' parallel safe; SELECT sentiment, count($t0.review) FROM (SELECT *, apply($t2.review) as sentiment FROM reviews_SIZE $t2) $t0 GROUP BY sentiment"""
+
+      self.matchSnipped(actual, expected)
+    finally:
+      GrizzlyGenerator._backend.queryGenerator = oldGen
+
+
 if __name__ == "__main__":
     unittest.main()
+

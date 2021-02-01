@@ -1,7 +1,7 @@
 postgresql:
   limit: limit
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
-
+  externaltable: CREATE SERVER IF NOT EXISTS import FOREIGN DATA WRAPPER $$fdw_extension_name$$; DROP FOREIGN TABLE IF EXISTS $$name$$; CREATE FOREIGN TABLE $$name$$ ($$schema$$) SERVER import OPTIONS ( $$postgresoptions$$ );
   TORCH_code: |
       import random
       import torch
@@ -90,7 +90,7 @@ monetdb:
 vector:
   limit: top
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
-  externaltable: CREATE EXTERNAL TABLE $$name$$ ($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$' $$format$$ $$options$$
+  externaltable: DROP TABLE IF EXISTS $$name$$; CREATE EXTERNAL TABLE $$name$$($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$', FORMAT='$$format$$' $$vectoroptions$$
   TF_code: |
     import tensorflow.compat.v1 as tf
     import numpy as np

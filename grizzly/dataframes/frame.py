@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 import queue
-from typing import Tuple
+from typing import List, Tuple
 from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
@@ -158,7 +158,7 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
-  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: list, n_predictions: int = 1, *helperFuncs):
+  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: List, n_predictions: int = 1, *helperFuncs):
 
     if not isinstance(self, Projection):
       ValueError("classification can only be applied to a projection")
@@ -216,7 +216,8 @@ class DataFrame(object):
     udf = ModelUDF(funcName, params, predictedType, ModelType.TORCH, template_replacement_dict)
     call = FuncCall(funcName, self.columns + [n_predictions] , udf, f"predicted_{attrsString}")
 
-    return self.project([call])
+    # return self.project([call])
+    return call
 
   def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
     funcName = "apply"
@@ -251,7 +252,8 @@ class DataFrame(object):
     udf = ModelUDF(funcName, params, returntype, ModelType.ONNX, template_replacement_dict)
     call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
 
-    return self.project([call])
+    # return self.project([call])
+    return call
 
   def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
     funcName = "apply"
@@ -270,7 +272,8 @@ class DataFrame(object):
     udf = ModelUDF(funcName, params, returntype, ModelType.TF, template_replacement_dict)
     call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
 
-    return self.project([call])
+    # return self.project([call])
+    return call
 
   def map(self, func):
     return self._map(func)
@@ -669,12 +672,13 @@ class Table(DataFrame):
     super().__init__([], None, alias)
 
 class ExternalTable(DataFrame):
-  def __init__(self, file, colDefs, hasHeader, delimiter, format):
+  def __init__(self, file, colDefs, hasHeader, delimiter, format, fdw_extension_name):
     self.filenames = file
     self.colDefs = colDefs
     self.hasHeader = hasHeader
     self.delimiter = delimiter
     self.format = format
+    self.fdw_extension_name = fdw_extension_name
     alias = GrizzlyGenerator._incrAndGetTupleVar()
     self.table = f"temp_ext_table{alias}"
     super().__init__([], None, alias)
@@ -708,7 +712,7 @@ class Filter(DataFrame):
 
 class Grouping(DataFrame):
 
-  def __init__(self, groupCols: list, parent: DataFrame):
+  def __init__(self, groupCols: List, parent: DataFrame):
     self.having = []
     self.groupCols = []
     computedAliases = [c.alias for c in parent.computedCols]

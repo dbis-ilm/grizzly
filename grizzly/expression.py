@@ -1,6 +1,7 @@
 import queue
 
 from enum import Enum
+from typing import List
 class ModelType(Enum):
   TORCH = 1
   TF    = 2
@@ -173,7 +174,7 @@ class ComputedCol(object):
 
 class UDF(object):
 
-  def __init__(self, name: str, params: list, lines: list, returnType: str):
+  def __init__(self, name: str, params: List[Param], lines: List[str], returnType: str):
     self.name = name
     self.params = params
     self.lines = lines
@@ -184,13 +185,13 @@ class UDF(object):
     return f"{self.name}({paramString}): {self.returnType}"
 
 class ModelUDF(UDF):
-  def __init__(self, name: str, params: list, returnType: str, modelType:ModelType, template_replacement_dict):
+  def __init__(self, name: str, params: List[Param], returnType: str, modelType:ModelType, template_replacement_dict):
     UDF.__init__(self,name, params, None, returnType)
     self.modelType = modelType
     self.templace_replacement_dict = template_replacement_dict
 
 class FuncCall(Expr):
-  def __init__(self, funcName: str, inputCols: list, udf: UDF = None, alias: str = ""):
+  def __init__(self, funcName: str, inputCols: List, udf: UDF = None, alias: str = ""):
     self.funcName = funcName
     self.inputCols = inputCols
     self.udf = udf
