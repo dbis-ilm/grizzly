@@ -26,7 +26,7 @@ def tensor_to_output(tensor) -> str:
         return("Positive")
 
 onnx_path = "/var/lib/postgresql/roberta-sequence-classification.onnx"
-df = grizzly.read_table("reviews_SIZE")
+df = grizzly.read_table("review_SIZE")
 df["sentiment"] = df["review"].apply_onnx_model(onnx_path, input_to_tensor, tensor_to_output)
 df = df.groupby(["sentiment"]).count("review")
 df.show(pretty = True)
