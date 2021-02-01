@@ -528,9 +528,8 @@ class SQLGenerator:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
-    
+    (pre, innerSQL) = self.generate(df)
     if df.parents:
-      (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
@@ -538,7 +537,6 @@ class SQLGenerator:
     else:
       (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
-      pre = []
 
     return (pre+fPre, aggSQL)
 
