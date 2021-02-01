@@ -139,6 +139,26 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_ComputedExpr(self):
+    df = grizzly.read_table("events")
+    df = df[df.globaleventid == 476829606]
+    df["newcol"] = df.theyear + df.monthyear
+
+    df = df[[df.newcol, df.theyear, df.monthyear]]
+    res = df.collect()
+
+    self.assertEqual(len(res), 1)
+    self.assertEqual(len(res[0]), 3)
+
+    theYear = 2015
+    monthYear = 201510
+
+    self.assertEqual(res[0][1], theYear)
+    self.assertEqual(res[0][2], monthYear)
+
+    self.assertEqual(res[0][0], theYear + monthYear)
+
+
   def test_New(self):
     df = grizzly.read_table("events")
     df = df["a"]
@@ -509,6 +529,12 @@ class DataFrameTest(CodeMatcher):
     finally:
       sys.stdout = bkp
 
+  def test_tail(self):
+    df = grizzly.read_table("events")
+    df = df.sort_values("globaleventid")
+    tl = df.tail(10)
+
+    self.assertEqual(len(tl), 10)
 
   def test_showPretty(self):
     df = grizzly.read_table("events") 

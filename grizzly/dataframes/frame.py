@@ -1,7 +1,7 @@
 from grizzly.aggregates import AggregateType
 import queue
 from typing import Tuple
-from grizzly.expression import BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
+from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
@@ -104,11 +104,15 @@ class DataFrame(object):
       groupCols = [groupCols]
     return Grouping(groupCols, self)
 
-  def limit(self, n: int, offset: int = -1):
+  def limit(self, n: int, offset = None):
     if n < 0:
       raise ValueError(f"LIMIT must not be negative (got {n})")
 
-    return Limit(n, offset, self)
+    if isinstance(offset, int):
+      offset = Constant(offset)
+
+
+    return Limit(Constant(n), offset, self)
 
   def sort_values(self, by, ascending:bool=True):
     if not isinstance(by, list):
@@ -359,7 +363,7 @@ class DataFrame(object):
 
       n = key.stop
 
-      offset = key.start if key.start is not None else -1
+      offset = key.start if key.start is not None else None
       return self.limit(n, offset)
 
     elif theType is ColRef : # if in the projection list e.g. "df.a" was given
@@ -603,7 +607,7 @@ class DataFrame(object):
   def count(self, col=None, alias=None):
     theCol = DataFrame._getFuncCallCol(self, col)
     if theCol is None:
-      theCol = "*"
+      theCol = [ColRef("*", self)]
 
     f = FuncCall(AggregateType.COUNT, theCol, None, alias)
     return self._exec_or_add_aggr(f)
@@ -629,7 +633,19 @@ class DataFrame(object):
     print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
 
   def head(self,n=5):
-    self.show(limit=n)
+    return self.limit(n).collect()
+    # self.show(limit=n)
+
+  def tail(self, n = 5):
+    if not isinstance(self, Ordering):
+      raise ValueError("can get tail only of ordered DataFrame")
+
+    cntFunc = FuncCall(AggregateType.COUNT, [])
+    prj = self.project(cntFunc)
+    expr = ArithmExpr(prj, Constant(n), ArithmeticOperation.SUB)
+
+    return self.limit(n, expr).collect()
+    l.show(limit = n)
     
   # def __str__(self):
   #   strRep = GrizzlyGenerator.toString(self, pretty=True)

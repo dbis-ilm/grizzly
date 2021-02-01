@@ -170,16 +170,23 @@ class Query:
         (pre,parentSQL) = subQry._buildFrom(df.parents[0])
 
         limitClause = self.generator.templates["limit"].lower()
+
+        (lPre,limitExpr) = self.generator._exprToSQL(df.limit)
+        pre += lPre
+        
+
         limitSQL = None
         if limitClause == "top":
-          limitSQL = f"SELECT TOP {df.limit} {df.alias}.* FROM ({parentSQL}) {df.alias}"
+          limitSQL = f"SELECT TOP {limitExpr} {df.alias}.* FROM ({parentSQL}) {df.alias}"
         elif limitClause == "limit":
-          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {df.limit}"
+          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {limitExpr}"
         else:
           raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
 
-        if df.offset > 0:
-          limitSQL += f" OFFSET {df.offset}"
+        if df.offset is not None:
+          (oPre, offsetExpr) = self.generator._exprToSQL(df.offset)
+          pre += oPre
+          limitSQL += f" OFFSET {offsetExpr}"
 
 
         return (preCode+pre, limitSQL)
@@ -296,7 +303,7 @@ class SQLGenerator:
     else: 
       return pythonType
 
-  def _exprToSQL(self, expr) -> Tuple[list[str], str]:
+  def _exprToSQL(self, expr) -> Tuple[List[str], str]:
     exprSQL = ""
     pre = []
 
@@ -368,6 +375,11 @@ class SQLGenerator:
     elif isinstance(expr, ArithmExpr):
       (lPre,l) = self._exprToSQL(expr.left)
       (rPre,r) = self._exprToSQL(expr.right)
+
+      if not isinstance(expr.left, ColRef) and not isinstance(expr.left, Constant):
+        l = f"({l})"
+      if not isinstance(expr.right, ColRef) and not isinstance(expr.right, Constant):
+        r = f"({r})"
 
       opStr = None
       if expr.operand == ArithmeticOperation.ADD:
@@ -464,7 +476,8 @@ class SQLGenerator:
     else:
       pre = []
 
-    cols = []
+    cols = [] if len(f.inputCols) > 0 else ["*"]
+
     for col in f.inputCols:
       (p,c) = self._exprToSQL(col)
       pre += p
@@ -476,7 +489,7 @@ class SQLGenerator:
 
     funcCode = f"{fName}({inCols})"
 
-    if f.alias is not None:
+    if f.alias:
       funcCode += f" as {f.alias}"
 
     return (pre,funcCode)
