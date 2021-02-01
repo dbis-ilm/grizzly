@@ -90,7 +90,7 @@ monetdb:
 vector:
   limit: top
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
-  externaltable: DROP TABLE IF EXISTS $$name$$; CREATE EXTERNAL TABLE $$name$$ ($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$' FORMAT='$$format$$'' $$vectoroptions$$
+  externaltable: DROP TABLE IF EXISTS $$name$$; CREATE EXTERNAL TABLE $$name$$($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$', FORMAT='$$format$$' $$vectoroptions$$
   TF_code: |
     import tensorflow.compat.v1 as tf
     import numpy as np
