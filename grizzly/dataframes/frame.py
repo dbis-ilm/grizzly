@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 import queue
-from typing import Tuple
+from typing import List, Tuple
 from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
@@ -158,7 +158,7 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
-  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: list, n_predictions: int = 1, *helperFuncs):
+  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: List, n_predictions: int = 1, *helperFuncs):
 
     if not isinstance(self, Projection):
       ValueError("classification can only be applied to a projection")
@@ -711,7 +711,7 @@ class Filter(DataFrame):
 
 class Grouping(DataFrame):
 
-  def __init__(self, groupCols: list, parent: DataFrame):
+  def __init__(self, groupCols: List, parent: DataFrame):
     self.having = []
     self.groupCols = []
     computedAliases = [c.alias for c in parent.computedCols]

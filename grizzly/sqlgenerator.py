@@ -284,7 +284,7 @@ class SQLGenerator:
 
   
   @staticmethod
-  def _unindent(lines: list) -> list:
+  def _unindent(lines: List[str]) -> List[str]:
     firstLine = lines[0]
 
     numLeadingSpaces = len(firstLine) - len(firstLine.lstrip())
