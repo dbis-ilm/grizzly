@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 service postgresql start
 echo "alter user postgres password 'password123'; \g" | psql

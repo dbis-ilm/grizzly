@@ -1,8 +1,6 @@
 import grizzly
-# Requires pyodbc and eventually unixodbc-dev for pyodbc build process
 from grizzly.relationaldbexecutor import RelationalExecutor
 from grizzly.sqlgenerator import SQLGenerator
-from grizzly.aggregates import AggregateType
 import psycopg2 as pg
 
 con = pg.connect(user="postgres", password="password123", host="localhost", database="movies")
