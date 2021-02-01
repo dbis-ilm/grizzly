@@ -216,7 +216,8 @@ class DataFrame(object):
     udf = ModelUDF(funcName, params, predictedType, ModelType.TORCH, template_replacement_dict)
     call = FuncCall(funcName, self.columns + [n_predictions] , udf, f"predicted_{attrsString}")
 
-    return self.project([call])
+    # return self.project([call])
+    return call
 
   def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
     funcName = "apply"
@@ -251,7 +252,8 @@ class DataFrame(object):
     udf = ModelUDF(funcName, params, returntype, ModelType.ONNX, template_replacement_dict)
     call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
 
-    return self.project([call])
+    # return self.project([call])
+    return call
 
   def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
     funcName = "apply"
@@ -270,7 +272,8 @@ class DataFrame(object):
     udf = ModelUDF(funcName, params, returntype, ModelType.TF, template_replacement_dict)
     call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
 
-    return self.project([call])
+    # return self.project([call])
+    return call
 
   def map(self, func):
     return self._map(func)

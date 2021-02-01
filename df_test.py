@@ -881,5 +881,55 @@ class DataFrameTest(CodeMatcher):
     finally:
       GrizzlyGenerator._backend.queryGenerator = oldGen
 
+  def test_computedColML(self):
+
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend.queryGenerator
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
+
+    def input_to_tensor(input:str):
+      return input
+
+    def tensor_to_output(tensor) -> str:
+      return "positiv"
+
+    try:
+      onnx_path = "/var/lib/postgresql/roberta-sequence-classification.onnx"
+      df = grizzly.read_table("reviews_SIZE")
+      df["sentiment"] = df["review"].apply_onnx_model(onnx_path, input_to_tensor, tensor_to_output)
+      df = df.groupby(["sentiment"]).count("review")
+      
+      # df.show(pretty = True)
+
+      actual = df.generateQuery()
+      expected = """CREATE OR REPLACE FUNCTION apply(input varchar(1024)) RETURNS varchar(1024) LANGUAGE plpython3u AS 'import onnxruntime
+import random
+def apply(input: str) -> str:
+      def input_to_tensor(input:str):
+      return input
+
+
+      def tensor_to_output(tensor) -> str:
+      return "positiv"
+
+
+  def apply_model(input):
+    if not hasattr(random, "onnx_session"):
+        random.onnx_session = onnxruntime.InferenceSession("/var/lib/postgresql/roberta-sequence-classification.onnx")
+    inputs = input_to_tensor(input)
+    ret = random.onnx_session.run(None, inputs)
+    return(tensor_to_output(ret))
+  return apply_model(input)
+return apply(input)
+' parallel safe; SELECT sentiment, count($t0.review) FROM (SELECT *, apply($t2.review) as sentiment FROM reviews_SIZE $t2) $t0 GROUP BY sentiment"""
+
+      self.matchSnipped(actual, expected)
+    finally:
+      GrizzlyGenerator._backend.queryGenerator = oldGen
+
+
 if __name__ == "__main__":
     unittest.main()
+
