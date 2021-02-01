@@ -669,12 +669,13 @@ class Table(DataFrame):
     super().__init__([], None, alias)
 
 class ExternalTable(DataFrame):
-  def __init__(self, file, colDefs, hasHeader, delimiter, format):
+  def __init__(self, file, colDefs, hasHeader, delimiter, format, fdw_extension_name):
     self.filenames = file
     self.colDefs = colDefs
     self.hasHeader = hasHeader
     self.delimiter = delimiter
     self.format = format
+    self.fdw_extension_name = fdw_extension_name
     alias = GrizzlyGenerator._incrAndGetTupleVar()
     self.table = f"temp_ext_table{alias}"
     super().__init__([], None, alias)
