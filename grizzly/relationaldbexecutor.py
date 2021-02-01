@@ -2,7 +2,7 @@ from grizzly.generator import GrizzlyGenerator
 from grizzly.sqlgenerator import SQLGenerator
 
 import logging
-
+from typing import List
 logger = logging.getLogger(__name__)
 
 class RelationalExecutor(object):
@@ -68,7 +68,7 @@ class RelationalExecutor(object):
       yield row
 
   @staticmethod
-  def __getHeader(rs) -> list[str]:
+  def __getHeader(rs) -> List[str]:
     if rs.description:
       cols = [dec[0] for dec in rs.description]
     else:

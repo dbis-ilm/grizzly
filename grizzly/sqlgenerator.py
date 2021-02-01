@@ -303,7 +303,7 @@ class SQLGenerator:
     else: 
       return pythonType
 
-  def _exprToSQL(self, expr) -> Tuple[list[str], str]:
+  def _exprToSQL(self, expr) -> Tuple[List[str], str]:
     exprSQL = ""
     pre = []
 

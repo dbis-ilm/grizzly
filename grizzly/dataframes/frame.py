@@ -607,7 +607,7 @@ class DataFrame(object):
   def count(self, col=None, alias=None):
     theCol = DataFrame._getFuncCallCol(self, col)
     if theCol is None:
-      theCol = "*"
+      theCol = [ColRef("*", self)]
 
     f = FuncCall(AggregateType.COUNT, theCol, None, alias)
     return self._exec_or_add_aggr(f)
