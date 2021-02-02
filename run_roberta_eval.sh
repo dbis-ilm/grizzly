@@ -12,7 +12,7 @@ do
 	for (( c=1; c<=$runs; c++ ))
 	do
 		cat eval_roberta_grizzly.py | sed "s/SIZE/$s/g"	> temp
-		time python temp
+		time python3 temp
 	      	echo -e "\n"	
 	done
 done
@@ -25,7 +25,7 @@ do
         for (( c=1; c<=$runs; c++ ))
 	do
                 cat eval_roberta_pandas.py | sed "s/SIZE/$s/g" > temp
-                time python temp 
+                time python3 temp 
         	echo -e "\n"
 	done
 done
@@ -38,7 +38,7 @@ do
         for (( c=1; c<=$runs; c++ ))
 	do
                 cat eval_roberta_modin.py | sed "s/SIZE/$s/g" > temp
-                time python temp
+                time python3 temp
 		echo -e "\n"
         done
 done

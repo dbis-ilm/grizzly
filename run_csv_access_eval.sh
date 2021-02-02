@@ -12,7 +12,7 @@ do
 	for (( c=1; c<=$runs; c++ ))	
 	do
 		cat eval_csv_access_grizzly.py | sed "s/SIZE/$s/g" > temp.py
-		time python temp.py
+		time python3 temp.py
 		echo -e "\n"
 	done
 done
@@ -26,7 +26,7 @@ do
         for (( c=1; c<=$runs; c++ ))
         do
                 cat eval_csv_access_pandas.py | sed "s/SIZE/$s/g" > temp.py
-		time python temp.py
+		time python3 temp.py
 		echo -e "\n"
         done
 done
@@ -40,7 +40,7 @@ do
         for (( c=1; c<=$runs; c++ ))
         do
                 cat eval_csv_access_modin.py | sed "s/SIZE/$s/g" > temp.py
-       		time python temp.py
+       		time python3 temp.py
 		echo -e "\n"
 	done
 done
