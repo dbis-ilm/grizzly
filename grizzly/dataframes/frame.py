@@ -12,6 +12,10 @@ from collections import namedtuple
 import logging
 logger = logging.getLogger(__name__)
 
+class GrizzlyIndexError(Exception):
+  def __init__(self, *args: object):
+      super(GrizzlyIndexError, self).__init__(*args)
+
 ###########################################################################
 # Base DataFrame with common operations
 
@@ -453,6 +457,10 @@ class DataFrame(object):
     
     One element: column name; Tuple: [index_value, column_name]
     '''
+
+    if not self.index:
+      raise GrizzlyIndexError("No index column set!")
+
     return _IndexAccessor(self)
 
   @property
@@ -573,10 +581,10 @@ class DataFrame(object):
 
   def first(self):
     tup = GrizzlyGenerator.fetchone(self)
-    if len(tup) > 1:
+    if len(tup) >= 1:
       return tup
-    elif len(tup == 1):
-      return tup[0]
+    # elif len(tup) == 1:
+    #   return tup
     else:
       return None
 
@@ -774,10 +782,11 @@ class _IndexAccessor:
       col = at[1]
       expr = BoolExpr(indexCol, Constant(row), BooleanOperation.EQ)
       return self.df.filter(expr).project(col).first()
+    elif isinstance(at, str) or isinstance(at, ColRef):
+      # we expect the accessor to be a column name
+      return self.df.project(at).first()
     else:
-      # we expect the accessor to be a column value of the index column
-      expr = BoolExpr(indexCol, Constant(at), BooleanOperation.EQ)
-      return self.df.filter(expr).first()
+      raise ValueError(f"invalid argument to at. Expected column name or tuple, but got {type(at)}")
 
 class _IndexLocator:
   def __init__(self, df):

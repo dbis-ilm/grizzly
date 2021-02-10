@@ -409,7 +409,11 @@ class SQLGenerator:
 
     elif isinstance(expr, SetExpr):
       (lPre,l) = self._exprToSQL(expr.left)
-      (rPre,r) = self._exprToSQL(expr.right)
+
+      if isinstance(expr.right, list):
+        (rPre, r) = ([], ",".join([str(x) for x in expr.right]))
+      else: # should be a DF
+        (rPre,r) = self._exprToSQL(expr.right)
 
       if not isinstance(expr.left, ColRef) and not isinstance(expr.left, Constant):
         l = f"({l})"
