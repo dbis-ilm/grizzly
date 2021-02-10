@@ -534,24 +534,23 @@ class SQLGenerator:
       tab.colDefs[i] = tab.colDefs[i].replace(":", " ").replace("str", "VARCHAR(1024)")
     schemaString = ",".join(tab.colDefs)
 
-    formatString = ""
-    if tab.format != "":
-        formatString += f", FORMAT='{tab.format}'"
-
-    options = [f"'delimiter'='{tab.delimiter}'"]
+    vectoroptions = [f"'delimiter'='{tab.delimiter}'"]
     if not tab.hasHeader:
-      options.append("'header'='false'")
-      options.append(f"'schema'='{schemaString}'")
-    optionString = f""", OPTIONS=({",".join(options)})"""
+      vectoroptions.append("'header'='false'")
+      vectoroptions.append(f"'schema'='{schemaString}'")
+    vectoroptionString = f""", OPTIONS=({",".join(vectoroptions)})"""
+
+    postgresoptions = f"filename '{tab.filenames}', format '{tab.format}', delimiter '{tab.delimiter}'"
 
     template = templates["externaltable"]
     code = template.replace("$$name$$", tab.table)\
       .replace("$$schema$$", schemaString)\
       .replace("$$filenames$$", tab.filenames)\
-      .replace("$$format$$", formatString)\
-      .replace("$$options$$", optionString)
+      .replace("$$format$$", tab.format)\
+      .replace("$$vectoroptions$$", vectoroptionString)\
+      .replace("$$postgresoptions$$", postgresoptions)\
+      .replace("$$fdw_extension_name$$", tab.fdw_extension_name)
 
-    queries.append(f"DROP TABLE IF EXISTS {tab.table}")
     queries.append(code)
     return queries
 
@@ -560,9 +559,8 @@ class SQLGenerator:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
-    
+    (pre, innerSQL) = self.generate(df)
     if df.parents:
-      (pre, innerSQL) = self.generate(df)
       df.alias = GrizzlyGenerator._incrAndGetTupleVar()
       (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM ({innerSQL}) as {df.alias}"
@@ -570,7 +568,6 @@ class SQLGenerator:
     else:
       (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
-      pre = []
 
     return (pre+fPre, aggSQL)
 
