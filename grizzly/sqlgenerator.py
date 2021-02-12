@@ -543,15 +543,18 @@ class SQLGenerator:
     postgresoptions = f"filename '{tab.filenames}', format '{tab.format}', delimiter '{tab.delimiter}'"
 
     template = templates["externaltable"]
-    code = template.replace("$$name$$", tab.table)\
-      .replace("$$schema$$", schemaString)\
-      .replace("$$filenames$$", tab.filenames)\
-      .replace("$$format$$", tab.format)\
-      .replace("$$vectoroptions$$", vectoroptionString)\
-      .replace("$$postgresoptions$$", postgresoptions)\
-      .replace("$$fdw_extension_name$$", tab.fdw_extension_name)
-
-    queries.append(code)
+    assert isinstance(template, list), "External table template must be a list"
+    
+    for t in template:
+      code = t.replace("$$name$$", tab.table)\
+        .replace("$$schema$$", schemaString)\
+        .replace("$$filenames$$", tab.filenames)\
+        .replace("$$format$$", tab.format)\
+        .replace("$$vectoroptions$$", vectoroptionString)\
+        .replace("$$postgresoptions$$", postgresoptions)\
+        .replace("$$fdw_extension_name$$", tab.fdw_extension_name)
+      queries.append(code)
+    
     return queries
 
   
