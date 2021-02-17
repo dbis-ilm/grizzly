@@ -835,6 +835,41 @@ class DataFrameTest(CodeMatcher):
     self.assertEqual(len(res[0]), 58)
     self.assertEqual(len(res[1]), 58)
 
+  def test_colAggmin(self):
+    df = grizzly.read_table("events")
+    minTone1 = df["avgtone"].min()
+    minTone2 = df.min("avgtone")
+
+    self.assertEqual(minTone1, minTone2,"col.min vs min(col)")
+
+  def test_colAggMax(self):
+    df = grizzly.read_table("events")
+    maxTone1 = df["avgtone"].max()
+    maxTone2 = df.max("avgtone")
+
+    self.assertEqual(maxTone1, maxTone2,"col.max vs max(col)")
+
+  def test_colAggSum(self):
+    df = grizzly.read_table("events")
+    sumTone1 = df["avgtone"].sum()
+    sumTone2 = df.sum("avgtone")
+
+    self.assertEqual(sumTone1, sumTone2,"col.sum vs sum(col)")
+
+  def test_colAggCount(self):
+    df = grizzly.read_table("events")
+    countTone1 = df["avgtone"].count()
+    countTone2 = df.count("avgtone")
+
+    self.assertEqual(countTone1, countTone2,"col.count vs count(col)")
+
+  def test_colAggMean(self):
+    df = grizzly.read_table("events")
+    meanTone1 = df["avgtone"].mean()
+    meanTone2 = df.mean("avgtone")
+
+    self.assertEqual(meanTone1, meanTone2,"col.mean vs mean(col)")
+
   # def test_predictPytorch(self):
 
   #   from grizzly.generator import GrizzlyGenerator

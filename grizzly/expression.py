@@ -229,6 +229,21 @@ class ColRef(Expr):
   def colName(self):
     return self.column
 
+  def min(self):
+    return self.df.min(self.column)
+
+  def max(self):
+    return self.df.max(self.column)
+
+  def count(self):
+    return self.df.count(self.column)
+
+  def mean(self):
+    return self.df.mean(self.column)
+
+  def sum(self):
+    return self.df.sum(self.column)
+
   ###### DF compatibility. 
   # A ColRef might be used just like a projection, thus, 
   # we mimic the DF API here and return a projection, followed by 

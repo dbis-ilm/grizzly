@@ -507,14 +507,17 @@ class SQLGenerator:
     else:
       pre = []
 
-    cols = [] if len(f.inputCols) > 0 else ["*"]
+    if f.inputCols:
+      cols = []
 
-    for col in f.inputCols:
-      (p,c) = self._exprToSQL(col)
-      pre += p
-      cols.append(c)
+      for col in f.inputCols:
+        (p,c) = self._exprToSQL(col)
+        pre += p
+        cols.append(c)
 
-    inCols = ",".join(cols)
+      inCols = ",".join(cols)
+    else:
+      inCols = ""
 
     fName = SQLGenerator._getSQLFuncName(f.funcName)
 
