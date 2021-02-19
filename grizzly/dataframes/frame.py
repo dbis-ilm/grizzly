@@ -1,7 +1,7 @@
 from grizzly.aggregates import AggregateType
 import queue
-from typing import List, Tuple
-from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr
+from typing import List, Tuple, Callable
+from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr, BooleanOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 
 class DataFrame(object):
 
-  def __init__(self, columns, parents, alias: str = ""):
+  def __init__(self, columns, parents, alias: str = "", index=None):
     super(DataFrame, self).__init__()
+
+    self.index = index
 
     if not columns:
       self.columns = []
@@ -513,15 +515,19 @@ class DataFrame(object):
   @property
   def at(self):
     '''
-    Access a value for a row/column label pair. In contrast to Pandas this must not return
-    a single value. If only row number is given, it will return that row. If a column name is given
-    the entire column is returned (all rows). 
+    Access a value for a row/column label pair. 
+    
+    One element: column name; Tuple: [index_value, column_name]
     '''
-    return _Accessor(self)
+
+    if not self.index:
+      raise GrizzlyIndexError("No index column set!")
+
+    return _IndexAccessor(self)
 
   @property
   def loc(self):
-    return _Accessor(self)
+    return _IndexLocator(self)
     
   @property  
   def iat(self):
@@ -635,6 +641,16 @@ class DataFrame(object):
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
     print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
 
+  def first(self):
+    tup = GrizzlyGenerator.fetchone(self)
+    if len(tup) >= 1:
+      return tup
+    # elif len(tup) == 1:
+    #   return tup
+    else:
+      return None
+
+
   def head(self,n=5):
     return self.limit(n).collect()
     # self.show(limit=n)
@@ -666,10 +682,14 @@ class DataFrame(object):
 
 
 class Table(DataFrame):
-  def __init__(self, table):
+  def __init__(self, table, index, schema):
     self.table = table
     alias = GrizzlyGenerator._incrAndGetTupleVar()
-    super().__init__([], None, alias)
+
+    if index and not (isinstance(index, str) or isinstance(index, list)):
+      raise ValueError("index definition must be a string or list of strings")
+
+    super().__init__([], None, alias, index)
 
 class ExternalTable(DataFrame):
   def __init__(self, file, colDefs, hasHeader, delimiter, format, fdw_extension_name):
@@ -811,41 +831,90 @@ class Ordering(DataFrame):
 #########################
 # helpers
 
-class _Accessor:
-
+class _IndexAccessor:
   def __init__(self, df):
     self.df = df
-    super().__init__()
+    super(_IndexAccessor, self).__init__()
+
+  def __getitem__(self, at):
+    # TODO: handle assigning to the specified position
+
+    indexCol = ColRef(self.df.index, self.df)
+    if isinstance(at, Tuple):
+      row = at[0]
+      col = at[1]
+      expr = BoolExpr(indexCol, Constant(row), BooleanOperation.EQ)
+      return self.df.filter(expr).project(col).first()
+    elif isinstance(at, str) or isinstance(at, ColRef):
+      # we expect the accessor to be a column name
+      return self.df.project(at).first()
+    else:
+      raise ValueError(f"invalid argument to at. Expected column name or tuple, but got {type(at)}")
+
+class _IndexLocator:
+  def __init__(self, df):
+    self.df = df
+    super(_IndexLocator, self).__init__()
 
   def __getitem__(self, loc):
-
-    row = None
-    col = None
-
-    if isinstance(loc, int): # a row number: OFFSET loc LIMIT 1 
-      row = loc
-    elif isinstance(loc, str): # a column name: Projection
-      col = loc
-    elif isinstance(loc, ColRef):
-      col = loc.column
-    elif isinstance(loc, Tuple): # row + column
-      if len(loc) != 2:
-        raise ValueError(f"Invalid length of access tuple: {len(loc)}, required: 2")
-
+    indexCol = ColRef(self.df.index, self.df)
+    if isinstance(loc, list):
+      # TODO: handle passing boolean array as mask
+      expr = SetExpr(indexCol, loc, SetOperation.IN)
+      return self.df.filter(expr)
+    elif isinstance(loc, Tuple):
       row = loc[0]
       col = loc[1]
-    else:
-      raise ValueError(f"invalid parameter values to at! type: {type(loc)}")
+      expr = BoolExpr(indexCol, Constant(row), BooleanOperation.EQ)
+      return self.df.filter(expr).project(col)
+    elif isinstance(loc, slice):
+      start = loc.start
+      stop = loc.stop
 
-    result = self.df
-    
-    if col:
-      result = result.project([col])
-    
-    if row:
-      result = result.limit(n=1, offset=row)
+      return self.df[ (indexCol >= start) & (indexCol <= stop) ]
 
-    return result.collect()
+    elif isinstance(loc, Callable):
+      raise NotImplementedError("passing callable is not supported yet")
+    else: # treat as a single row label 
+      expr = BoolExpr(indexCol, Constant(loc), BooleanOperation.EQ)
+      return self.df.filter(expr)
+    
+
+# class _Accessor:
+
+#   def __init__(self, df):
+#     self.df = df
+#     super().__init__()
+
+#   def __getitem__(self, loc):
+
+#     row = None
+#     col = None
+
+#     if isinstance(loc, int): # a row number: OFFSET loc LIMIT 1 
+#       row = loc
+#     elif isinstance(loc, str): # a column name: Projection
+#       col = loc
+#     elif isinstance(loc, ColRef):
+#       col = loc.column
+#     elif isinstance(loc, Tuple): # row + column
+#       if len(loc) != 2:
+#         raise ValueError(f"Invalid length of access tuple: {len(loc)}, required: 2")
+
+#       row = loc[0]
+#       col = loc[1]
+#     else:
+#       raise ValueError(f"invalid parameter values to at! type: {type(loc)}")
+
+#     result = self.df
+    
+#     if col:
+#       result = result.project([col])
+    
+#     if row:
+#       result = result.limit(n=1, offset=row)
+
+#     return result.collect()
 
 class Traverser:
   

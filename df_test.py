@@ -533,6 +533,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("events")
     df = df.sort_values("globaleventid")
     tl = df.tail(10)
+    print(tl)
 
     self.assertEqual(len(tl), 10)
 
@@ -787,32 +788,52 @@ class DataFrameTest(CodeMatcher):
     self.assertEqual(i, 2) # two columns
 
   def test_at(self):
-    df = grizzly.read_table("events")
-    res = df.at[2,'actor1name']
+    df = grizzly.read_table("events",index="globaleventid")
+    res = df.at[467268277,'actor1name']
 
     self.assertEqual(len(res), 1)
-    self.assertEqual(len(res[0]), 1)
-
-  def test_atProj(self):
-    df = grizzly.read_table("events")
-    res = df.at[2,df.actor1name]
-
-    self.assertEqual(len(res), 1)
-    self.assertEqual(len(res[0]), 1)
+    self.assertEqual(res[0], 'AFRICA')
 
   def test_atColOnly(self):
-    df = grizzly.read_table("events")
+    df = grizzly.read_table("events",index="globaleventid")
     res = df.at[df.actor1name]
 
-    self.assertEqual(len(res), 30354)
-    self.assertEqual(len(res[0]), 1)
+    self.assertEqual(len(res), 1)
+    # self.assertEqual(len(res[0]), 1)
 
-  def test_atRowOnly(self):
-    df = grizzly.read_table("events")
-    res = df.at[17]
+  def test_locInt(self):
+    df = grizzly.read_table("events", index="globaleventid")
+    res = df.loc[467268277].collect()
 
     self.assertEqual(len(res), 1)
     self.assertEqual(len(res[0]), 58)
+
+
+  def test_locIntNoIndex(self):
+    df = grizzly.read_table("events", index=None)
+ 
+    with self.assertRaises(ValueError):
+      df.loc[467268277].collect()
+
+
+  def test_locListGen(self):
+    df = grizzly.read_table("events", index="globaleventid")
+    df = df.loc[[467268277,477265011]]
+
+    actual = df.generateQuery()
+    expected = "select * from (select * from events $t0) $t1 WHERE $t1.globaleventid in (467268277,477265011)"    
+
+    self.matchSnipped(actual, expected)
+
+  def test_locList(self):
+    df = grizzly.read_table("events", index="globaleventid")
+    df = df.loc[[467268277,477265011]]
+
+    res = df.collect()    
+
+    self.assertEqual(len(res), 2)
+    self.assertEqual(len(res[0]), 58)
+    self.assertEqual(len(res[1]), 58)
 
   # def test_predictPytorch(self):
 
