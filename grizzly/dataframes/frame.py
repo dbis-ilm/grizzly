@@ -12,6 +12,11 @@ from collections import namedtuple
 import logging
 logger = logging.getLogger(__name__)
 
+
+class GrizzlyIndexError(Exception):
+  def __init__(self, *args: object) -> None:
+    super(GrizzlyIndexError, self).__init__(*args)
+
 ###########################################################################
 # Base DataFrame with common operations
 
