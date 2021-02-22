@@ -295,9 +295,7 @@ class DataFrameTest(CodeMatcher):
 
     a = g.count("actor1name", "cnt")
     
-       
-    # print(f"cnt: {a}")
-    self.assertEquals(len(a.collect()),1)
+    self.assertEqual(len(a.collect()),1)
 
   def test_groupByAggLimit(self):
     df = grizzly.read_table("events")
@@ -773,7 +771,7 @@ class DataFrameTest(CodeMatcher):
     n = 0
     for tup in df.itertuples():
       s = str(tup)
-      self.assertRegexpMatches(s, r)
+      self.assertRegex(s, r)
       n += 1
 
     self.assertEqual(n, 10, "total number") # will be increased one more time in last iteration
