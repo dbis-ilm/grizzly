@@ -492,6 +492,14 @@ class DataFrame(object):
 
   # Pandas DF stuff
 
+  def __len__(self) -> int:
+    f = FuncCall(AggregateType.COUNT, ['*'],None, "rowcount")
+    cnter = self.project([f])
+
+    # res is a tuple! We are only interested in the first element
+    res = GrizzlyGenerator.fetchone(cnter)[0]
+    return res
+
   @property
   def shape(self):
     '''

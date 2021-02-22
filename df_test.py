@@ -495,6 +495,19 @@ class DataFrameTest(CodeMatcher):
     self.assertEqual(cols, 3) # 2 grouping + 1 aggr
     self.assertEqual(rows, 879)
 
+  def test_Len(self):
+    df = grizzly.read_table("events") 
+    l = len(df)
+
+    self.assertEqual(l, 30354)
+
+  def test_LenJoin(self):
+    df1 = grizzly.read_table("t1")
+    df2 = grizzly.read_table("t2")
+    
+    j  = df1.join(df2, on = (df1.actor1name == df2.actor2name) | (df1["actor1countrycode"] <= df2["actor2countrycode"]), how="left outer")
+    cnt = len(j)
+    self.assertEqual(cnt, 9899259)
 
   def test_collect(self):
     df = grizzly.read_table("events") 
@@ -576,14 +589,6 @@ class DataFrameTest(CodeMatcher):
   #   rowsLen = rows+ 1 # column names
 
   #   self.assertEqual(dfLen, rowsLen) 
-
-  def test_ViewJoin(self):
-    df1 = grizzly.read_table("t1")
-    df2 = grizzly.read_table("t2")
-    
-    j  = df1.join(df2, on = (df1.actor1name == df2.actor2name) | (df1["actor1countrycode"] <= df2["actor2countrycode"]), how="left outer")
-    cnt = j.count()
-    self.assertEqual(cnt, 9899259)
 
   def test_udf(self):
     from grizzly.generator import GrizzlyGenerator

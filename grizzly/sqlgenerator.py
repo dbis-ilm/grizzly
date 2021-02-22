@@ -436,7 +436,7 @@ class SQLGenerator:
 
     # it's a plain column reference  
     elif isinstance(expr, ColRef):
-      if expr.df and expr.column != "*":
+      if expr.df is not None and expr.column != "*":
         exprSQL = f"{expr.df.alias}.{expr.column}"
       else:
         exprSQL = expr.column
@@ -451,7 +451,7 @@ class SQLGenerator:
       if not isinstance(expr.value, FuncCall):
         exprSQL = f"({exprSQL})"
 
-        if expr.alias:
+        if expr.alias is not None and expr.alias != "":
           exprSQL = f"{exprSQL} as {expr.alias}"      
 
     # it's a function call -> produce CREATE func if necessary and call
