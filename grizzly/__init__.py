@@ -1,3 +1,4 @@
+from grizzly.dataframes.schema import Schema, SchemaError
 from .dataframes.frame import Table
 from .dataframes.frame import ExternalTable
 from .generator import GrizzlyGenerator
@@ -9,8 +10,18 @@ def close():
   GrizzlyGenerator.close()
 
 def read_table(tableName, index=None, schema=None):
+
+  if schema is None:
+    schema = Schema(None)
+  elif isinstance(schema, dict):
+    schema = Schema.build(schema)
+    # schema = Schema(schema)
+  elif not isinstance(schema, Schema):
+    raise SchemaError(f"invalid type for schema. Must be None|dict|Schema but got {type(schema)}")
+
+
   return Table(tableName, index, schema)
 
-def read_external_files(file, colDefs, hasHeader=True, delimiter='|', format="", fdw_extension_name=""):
-  assert format != "", "External file format must be specified"
-  return ExternalTable(file, colDefs, hasHeader, delimiter, format, fdw_extension_name)
+def read_external_files(file, colDefs, hasHeader=True, delimiter='|', fileFormat="", fdw_extension_name=""):
+  assert fileFormat != "", "External file format must be specified"
+  return ExternalTable(file, colDefs, hasHeader, delimiter, fileFormat, fdw_extension_name)

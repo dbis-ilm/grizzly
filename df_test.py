@@ -1,3 +1,4 @@
+from grizzly.dataframes.schema import ColType
 from grizzly.expression import ExpressionException
 import unittest
 import sqlite3
@@ -243,7 +244,7 @@ class DataFrameTest(CodeMatcher):
     
     actual = df.generateQuery()
     
-    sql = "select computed, count(*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
+    sql = "select computed, count($t1.*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
 
     expected = f"""create or replace function mymod(s varchar(1024)) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
 
@@ -906,7 +907,7 @@ class DataFrameTest(CodeMatcher):
     GrizzlyGenerator._backend.queryGenerator = newGen
 
     try:
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False, format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False, fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -914,7 +915,7 @@ class DataFrameTest(CodeMatcher):
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -922,7 +923,7 @@ class DataFrameTest(CodeMatcher):
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -930,7 +931,7 @@ class DataFrameTest(CodeMatcher):
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -988,6 +989,22 @@ return apply(input)
     finally:
       GrizzlyGenerator._backend.queryGenerator = oldGen
 
+
+  def test_LoadWithSchema(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    self.assertEqual(len(df.schema), 4)
+    self.assertEqual(df.schema["globaleventid"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actiongeo_long"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actor1name"], ColType.TEXT)
+    self.assertEqual(df.schema["actor1countrycode"], ColType.TEXT)
+
+  def test_ProjectionSchema(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
+    self.assertEqual(len(df.schema), 3)
+    self.assertEqual(df.schema["globaleventid"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actiongeo_long"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actor1name"], ColType.TEXT)
 
 if __name__ == "__main__":
     unittest.main()

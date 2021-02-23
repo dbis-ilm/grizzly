@@ -1,6 +1,6 @@
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
+from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 
 from typing import List, Tuple
@@ -312,7 +312,8 @@ class SQLGenerator:
       exprSQL = "NULL"
 
     elif isinstance(expr,str):
-      exprSQL = expr # TODO: currently to handle *, but maybe this should done earlier and be converted into a special ColRef?
+      raise ValueError(f"string is not an expresion! {expr}")
+      # exprSQL = expr # TODO: currently to handle *, but maybe this should done earlier and be converted into a special ColRef?
     
     # we were given a constant
     elif isinstance(expr, Constant):
@@ -354,6 +355,26 @@ class SQLGenerator:
       else:
         raise ExpressionException(f"unknown logical operation: {expr.operand}")
 
+      pre = lPre + rPre
+
+    elif isinstance(expr, SetExpr): # must be handled before BoolExpr
+      (lPre,l) = self._exprToSQL(expr.left)
+
+      if isinstance(expr.right, list):
+        (rPre, r) = ([], ",".join([str(x) for x in expr.right]))
+      else: # should be a DF
+        (rPre,r) = self._exprToSQL(expr.right)
+
+      if not isinstance(expr.left, ColRef) and not isinstance(expr.left, Constant):
+        l = f"({l})"
+      if not isinstance(expr.right, ColRef) and not isinstance(expr.right, Constant):
+        r = f"({r})"
+
+      opStr = "UNKNOWN"
+      if expr.operand == SetOperation.IN:
+        opStr = "IN"
+
+      exprSQL = f"{l} {opStr} {r}"
       pre = lPre + rPre
 
     elif isinstance(expr, BoolExpr):
@@ -407,25 +428,7 @@ class SQLGenerator:
       exprSQL = f"{l} {opStr} {r}"
       pre = lPre + rPre
 
-    elif isinstance(expr, SetExpr):
-      (lPre,l) = self._exprToSQL(expr.left)
-
-      if isinstance(expr.right, list):
-        (rPre, r) = ([], ",".join([str(x) for x in expr.right]))
-      else: # should be a DF
-        (rPre,r) = self._exprToSQL(expr.right)
-
-      if not isinstance(expr.left, ColRef) and not isinstance(expr.left, Constant):
-        l = f"({l})"
-      if not isinstance(expr.right, ColRef) and not isinstance(expr.right, Constant):
-        r = f"({r})"
-
-      opStr = "UNKNOWN"
-      if expr.operand == SetOperation.IN:
-        opStr = "IN"
-
-      exprSQL = f"{l} {opStr} {r}"
-      pre = lPre + rPre
+    
 
     # if the thing to produce is a DataFrame, we probably have a subquery
     elif isinstance(expr, DataFrame): 
@@ -433,10 +436,13 @@ class SQLGenerator:
       subQry = Query(self)
       (pre,exprSQL) = subQry._buildFrom(expr)
       
+    elif isinstance(expr, AllColumns): # must be checked befor ColRef!
+      exprSQL = "*"
 
     # it's a plain column reference  
     elif isinstance(expr, ColRef):
-      if expr.df is not None and expr.column != "*":
+
+      if expr.df is not None:
         exprSQL = f"{expr.df.alias}.{expr.column}"
       else:
         exprSQL = expr.column
