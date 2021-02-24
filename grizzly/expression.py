@@ -146,8 +146,9 @@ class BinaryExpression(Expr):
       return hash((self.left, self.right, self.operand))
 
 class Constant(Expr):
-  def __init__(self, value):
+  def __init__(self, value, alias: str = None):
     self.value = value
+    self.alias = alias
     super().__init__()
 
 class ArithmExpr(BinaryExpression):

@@ -1,4 +1,4 @@
-from grizzly.dataframes.schema import Schema, SchemaError
+from grizzly.dataframes.schema import ColType, Schema, SchemaError
 from grizzly.aggregates import AggregateType
 import queue
 from typing import List, Tuple, Callable
@@ -106,6 +106,18 @@ class DataFrame(object):
       on = [lOn, rOn]
 
     return Join(self, other, on, how, comp)
+
+  def union(self, other, distinct = False, by = None):
+    left = self
+    right = other
+    if by is not None:
+      if not isinstance(by, list):
+        raise ValueError(f"by clause for union must be a list of columns, but got {by}")
+
+      left = self.project(by)
+      right = other.project(by)
+
+    return Union(left, right, distinct)
 
   def groupby(self, groupCols):
     if not isinstance(groupCols, list):
@@ -557,33 +569,105 @@ class DataFrame(object):
 
 
   def min(self, col=None,alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MIN, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.MIN, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      return self.__genTableAgg(col, AggregateType.MIN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
 
   def max(self, col=None, alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MAX, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.MAX, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      return self.__genTableAgg(col, AggregateType.MAX, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
 
   def mean(self, col=None,alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MEAN, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.MEAN, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      # MEAN only over numeric columns
+      return self.__genTableAgg(col, AggregateType.MEAN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
 
   def count(self, col=None, alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    if theCol is None:
-      theCol = [AllColumns(self)]
+    if isinstance(self, Grouping):
+      theCol = DataFrame._getFuncCallCol(self, col)
+      if theCol is None:
+        theCol = [AllColumns(self)]
 
-    f = FuncCall(AggregateType.COUNT, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+      f = FuncCall(AggregateType.COUNT, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      return self.__genTableAgg(col, AggregateType.COUNT, lambda _: True)
 
-  def sum(self , col, alias = None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.SUM, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+  def sum(self , col=None, alias = None):
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
 
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.SUM, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      # SUM only over numeric columns
+      return self.__genTableAgg(col, AggregateType.SUM, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
+
+
+  def __genTableAgg(self, col, aggType, filterFunc):
+    if not self.schema and col is None:
+      raise SchemaError("must have a schema to compute aggregations over table")
+
+
+    if col is None:
+      col = self.schema.columns(filterFunc)
+    elif not isinstance(col, list):
+      # theCol = DataFrame._getFuncCallCol(self, col)[0]
+      # colType = self.schema._inferType(theCol)
+      # if not filterFunc(("",colType)):
+      #   raise SchemaError("column is not applicable!")
+      col = [col]
+
+    aggName = AggregateType.getName(aggType)
+
+    result = None
+    for colName in col:
+      theCols = DataFrame._getFuncCallCol(self, colName)
+      theCol = theCols[0]
+      self.schema.check(theCol)
+
+      colType = self.schema[theCol.colName()]
+      if not filterFunc(("",colType)):
+        raise SchemaError(f"cannot apply function {aggName} to column of type {colType} (column: {theCol.colName()})")
+
+      f = FuncCall(aggType, theCols, alias=aggName)
+      proj = [Constant(theCol.column, "colname"), f]
+      if result is None:
+        result = self.project(proj)
+      else:
+        prj = self.project(proj)
+        result = result.union(prj)
+
+    if len(col) == 1:
+      # fetch single value. Consists of two columns (col name and value) -> return only the value
+      t = result.first()
+      if t is not None:
+        result = t[1]
+
+    return result
+ 
 
   ###################################
   # show functions
@@ -785,6 +869,21 @@ class Join(DataFrame):
   def rightParent(self):
     return self.right
 
+class Union(DataFrame):
+  def __init__(self, parent, other, distinct):
+    # TODO check schemas match!
+    
+    self.other = other
+    self.distinct = distinct
+
+    super().__init__(parent.schema, parent)
+
+  def leftParent(self):
+    return self.parents[0]
+
+  def rightParent(self):
+    return self.other
+
 class Limit(DataFrame):
   def __init__(self, limit: int, offset: int, parent):
     self.limit = limit
@@ -805,6 +904,8 @@ class Ordering(DataFrame):
         sortCols.append(self.updateRef(col))
       else:
         raise ExpressionException(f"unsupported type for oder by value: {type(col)}")
+
+    parent.schema.check(sortCols)
 
     self.by = sortCols
     self.ascending = ascending

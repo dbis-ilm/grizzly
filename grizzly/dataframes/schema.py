@@ -67,7 +67,7 @@ class Schema(object):
     if self.typeDict is not None and item in self.typeDict:
       return self.typeDict[item]
     else:
-      return None
+      return ColType.UNKNOWN
 
   def items(self):
     if self.typeDict is None:
@@ -81,11 +81,14 @@ class Schema(object):
     else:
       return list(self.typeDict.values())
   
-  def columns(self):
+  def columns(self, filterFunc = None):
     if self.typeDict is None:
       return []
     else:
-      return list(self.typeDict.keys())
+      l = self.typeDict.items()
+      if filterFunc is not None:
+        l = filter(filterFunc, l)
+      return list(map(lambda t : t[0], l))
 
   def check(self, item):
     if self.typeDict is None:
@@ -137,11 +140,11 @@ class Schema(object):
   def __str__(self):
     return str(self.typeDict)
 
-  # def __iter__(self):
-  #   if self.typeDict is None:
-  #     return iter({})
-  #   else:
-  #     return iter(self.typeDict)
+  def __iter__(self):
+    if self.typeDict is None:
+      return iter({})
+    else:
+      return iter(self.typeDict)
 
   @staticmethod
   def __genName():
@@ -201,7 +204,7 @@ class Schema(object):
             newSchemaDict[name] = self.typeDict[name]
           else:
             # is not in parent schema -> must be a new column
-            t = Schema._inferType(col)
+            t = Schema._inferType(col, self)
             newSchemaDict[name] = t
 
     return Schema(newSchemaDict)
@@ -211,7 +214,7 @@ class Schema(object):
     Add a new column to this schema
     This modifies the schema in place and also returns the resulting schema
     '''  
-    resultType = Schema._inferType(value)
+    resultType = Schema._inferType(value, self)
     name = Schema._getName(value)
     
     if self.typeDict is None:
@@ -239,14 +242,14 @@ class Schema(object):
       return Schema(resulting.update(rDict))
 
   @staticmethod
-  def _inferType(col):
+  def _inferType(col, schema = None):
     from grizzly.dataframes.frame import DataFrame
 
     if isinstance(col, ColRef):
       # might happen when inferring type from function call
       # get type from schema of referenced DF
-      if  col.column in col.df.schema:
-        return col.df.schema[col.column]
+      if  col.column in schema:
+        return schema[col.column]
       else:
         return ColType.UNKNOWN
         # raise SchemaError(f"{col} not in schema of df ({col.df.schema})")
@@ -266,7 +269,7 @@ class Schema(object):
         if strFunc.endswith("min") or strFunc.endswith("max"):
           # get type from input col
           inputCol = func.inputCols[0]
-          return Schema._inferType(inputCol)
+          return Schema._inferType(inputCol, schema)
         else:
           return ColType.NUMERIC
     elif isinstance(col, Constant):

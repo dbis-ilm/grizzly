@@ -1,5 +1,5 @@
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
+from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame, Union
 from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 
@@ -124,6 +124,19 @@ class Query:
         joinSQL = f"SELECT {proj} FROM ({lparentSQL}) {lAlias} {df.how} JOIN ({rparentSQL}) {rAlias} {onSQL}"
 
         return (preCode + lpre + rpre, joinSQL)
+
+      elif isinstance(df, Union):
+        lQry = Query(self.generator)
+        (lpre,lparentSQL) = lQry._buildFrom(df.leftParent())
+
+        rQry = Query(self.generator)
+        (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
+
+        allKW = "ALL" if not df.distinct else ""
+
+        unionSQL = f"{lparentSQL} UNION {allKW} {rparentSQL}"
+
+        return (preCode + lpre + rpre, unionSQL)
 
       elif isinstance(df, Grouping):
         subQry = Query(self.generator)
@@ -317,8 +330,9 @@ class SQLGenerator:
     
     # we were given a constant
     elif isinstance(expr, Constant):
+      alias = f"as {expr.alias}" if expr.alias is not None else ""
       if isinstance(expr.value, str):
-        exprSQL = f"'{expr.value}'"
+        exprSQL = f"'{expr.value}' {alias}"
       elif isinstance(expr.value, list):
         
         eSQLs = []
@@ -331,7 +345,7 @@ class SQLGenerator:
         exprSQL = f"({exprSQL})"
 
       else:
-        exprSQL = f"{expr.value}"
+        exprSQL = f"{expr.value} {alias}"
 
     # TODO: should LogicExpr be merged into BoolExpr ? 
     elif isinstance(expr, LogicExpr):
@@ -502,7 +516,7 @@ class SQLGenerator:
       if aggType == AggregateType.MEAN:
         return "avg"
 
-      return str(aggType)[len("AggregateType."):].lower()
+      return AggregateType.getName(aggType)
 
     # if we get here it's not a string and not a AggType --> error
     raise ExpressionException(f"invalid function value: {aggType}, expected string or AggregateType, but got {type(aggType)}")
