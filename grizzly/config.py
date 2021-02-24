@@ -52,6 +52,9 @@ class Config:
     self.profile = profile
     self.config = config
 
+  def __contains__(self, key: str):
+    return key in self.config
+
   def __getitem__(self, key: str):
     if key in self.config:
       return self.config[key]

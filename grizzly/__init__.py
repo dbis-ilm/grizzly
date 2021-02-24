@@ -9,10 +9,13 @@ def use(backend):
 def close():
   GrizzlyGenerator.close()
 
-def read_table(tableName, index=None, schema=None):
+def read_table(tableName, index=None, schema=None, inferSchema=False):
 
-  if schema is None:
+  if schema is None and not inferSchema:
     schema = Schema(None)
+  elif schema is None and inferSchema:
+    schemaTypes = GrizzlyGenerator._backend.getSchemaForObject(tableName)
+    schema = Schema(schemaTypes)
   elif isinstance(schema, dict):
     schema = Schema.build(schema)
     # schema = Schema(schema)

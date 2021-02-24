@@ -1,3 +1,4 @@
+from grizzly.dataframes.schema import ColType
 from grizzly.config import Config
 from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame, Union
@@ -41,6 +42,25 @@ class SQLGenerator:
     #   return "bigint"
     else: 
       return pythonType
+
+  @staticmethod
+  def _mapFromSQLTypes(sqlType: str):
+    if sqlType is None:
+      return ColType.UNKNOWN
+
+    sqlType = sqlType.strip().lower()
+
+    if sqlType.startswith("int") or sqlType == "bigint" or sqlType.startswith("float") or sqlType.startswith("double") or sqlType.startswith("tiny"):
+      return ColType.NUMERIC
+    
+    elif sqlType.startswith("varchar") or sqlType.startswith("char") or sqlType.startswith("text"):
+      return ColType.TEXT
+
+    elif sqlType.startswith("bool"):
+      return ColType.BOOL
+
+    else:
+      return ColType.UNKNOWN
 
   def _exprToSQL(self, expr) -> Tuple[List[str], str]:
     exprSQL = ""
@@ -530,3 +550,24 @@ class SQLGenerator:
     (preQueryCode, qryString) = self._buildFrom(df)
 
     return (preQueryCode, qryString)
+
+  def getTableSchema(self, tableName):
+    
+    qry = None
+    columnNames = None
+    columnTypes = None
+    if "schema_query" in self.templates: 
+      qry = self.templates["schema_query"]
+      qry = qry.replace("$$tablename$$",tableName)
+      columnNames = self.templates["colname_column"]
+      columnTypes = self.templates["coltype_column"]
+    elif "schema_table" in self.templates:
+      schematable = self.templates["schema_table"]
+      tablenameCol = self.templates["tablename_column"]
+      colname_column = self.templates["colname_column"]
+      coltype_column = self.templates["coltype_column"]
+      qry = f"SELECT {colname_column}, {coltype_column} FROM {schematable} where {tablenameCol} = '{tableName}'"
+      columnNames = 0
+      columnTypes = 1
+
+    return (qry, columnNames, columnTypes)

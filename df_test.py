@@ -64,6 +64,12 @@ class DataFrameTest(CodeMatcher):
   def tearDown(self):
     grizzly.close()
 
+  def test_loadWithSchemaInferSQLite(self):
+    df = grizzly.read_table("events", inferSchema=True)
+    self.assertIsNotNone(df.schema.typeDict, "no schema dict set")
+
+    self.assertEqual(len(df.schema), 58)
+
   def test_groupby(self):
     df = grizzly.read_table("events")
     g = df.groupby(["theyear","actor1name"])

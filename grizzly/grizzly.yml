@@ -61,6 +61,10 @@ postgresql:
 sqlite:
   limit: limit
 
+  schema_query: PRAGMA table_info($$tablename$$)
+  colname_column: 1
+  coltype_column: 2
+
 monetdb:
   limit: limit
   createfunction: | 

@@ -36,6 +36,24 @@ class RelationalExecutor(object):
   def close(self):
     self.connection.close()
 
+  def getSchemaForObject(self, objName: str):
+    (qry, namesColIdx, typesColIdx) = self.queryGenerator.getTableSchema(objName)
+    if qry is None:
+      return None
+
+    dtypes = {}
+    rs = self._execute(qry)
+    for row in rs:
+      colName = row[namesColIdx]
+      colType = row[typesColIdx]
+
+      dtypes[colName] = type(self.queryGenerator)._mapFromSQLTypes(str(colType))
+
+    rs.close()
+
+    return dtypes
+
+
   def fetchone(self, df):
     rs = self.execute(df)
     return rs.fetchone()
