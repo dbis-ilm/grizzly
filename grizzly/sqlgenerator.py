@@ -201,8 +201,17 @@ class Query:
           pre += exprPre
           by.append(exprSQL)
 
+        direction = ""
+        # If ascending is specified, use it. Else use columnwise sort order if specified.
+        # Otherwise use default order by DBMS
+        if df.ascending is not None:
+          direction = "ASC" if df.ascending else "DESC"
+        elif (df.order):
+          by = [i + " " + j for i, j in zip(by, df.order)]
+        else:
+          direction = "ASC"
+
         by = ",".join(by)
-        direction = "ASC" if df.ascending else "DESC"
 
         qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
 

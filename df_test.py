@@ -297,7 +297,7 @@ class DataFrameTest(CodeMatcher):
     
        
     # print(f"cnt: {a}")
-    self.assertEquals(len(a.collect()),1)
+    self.assertEqual(len(a.collect()),1)
 
   def test_groupByAggLimit(self):
     df = grizzly.read_table("events")
@@ -533,7 +533,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("events")
     df = df.sort_values("globaleventid")
     tl = df.tail(10)
-    print(tl)
+    #print(tl)
 
     self.assertEqual(len(tl), 10)
 
@@ -734,6 +734,28 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
+  def test_orderingColumnwise(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = ["globaleventid","actor1name"], order=["asc", "desc"])
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid asc, $t2.actor1name desc"
+
+    self.matchSnipped(actual, expected)
+
+  def test_orderingGlobalOverColumnwise(self):
+    df = grizzly.read_table("events") 
+    df = df[["globaleventid","actor1name"]]
+    df = df.sort_values(by = ["globaleventid","actor1name"], ascending=False, order=["asc", "desc"])
+
+    actual = df.generateQuery()
+
+    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid, $t2.actor1name DESC"
+
+    self.matchSnipped(actual, expected)
+
   def test_iterate(self):
     df = grizzly.read_table("events")
 
@@ -768,7 +790,7 @@ class DataFrameTest(CodeMatcher):
     n = 0
     for tup in df.itertuples():
       s = str(tup)
-      self.assertRegexpMatches(s, r)
+      self.assertRegex(s, r)
       n += 1
 
     self.assertEqual(n, 10, "total number") # will be increased one more time in last iteration
