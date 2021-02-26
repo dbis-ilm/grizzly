@@ -70,6 +70,16 @@ class DataFrameTest(CodeMatcher):
 
     self.assertEqual(len(df.schema), 58)
 
+  def test_loadWithSchemaInferSQLiteTypeCheck(self):
+    df = grizzly.read_table("t3", inferSchema=True)
+    self.assertIsNotNone(df.schema.typeDict, "no schema dict set")
+
+    self.assertEqual(len(df.schema), 4)
+
+    expected = {"globaleventid":ColType.NUMERIC, "actor1name": ColType.TEXT, "actiongeo_long":ColType.NUMERIC,"actor1countrycode":ColType.TEXT}
+
+    self.assertDictEqual(expected, df.schema.typeDict)
+
   def test_groupby(self):
     df = grizzly.read_table("events")
     g = df.groupby(["theyear","actor1name"])
