@@ -10,7 +10,7 @@ def apply(input:str) -> str:
     def to_numpy(tensor):
         return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
 
-    tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
+    tokenizer = RobertaTokenizer.from_pretrained("myroberta")
     input_ids = torch.tensor(tokenizer.encode(input, add_special_tokens=True)).unsqueeze(0)  # Batch size 1
     ort_inputs = {random.onnx_session.get_inputs()[0].name: to_numpy(input_ids)}
     return ort_inputs
