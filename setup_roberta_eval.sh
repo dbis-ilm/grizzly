@@ -1,5 +1,7 @@
 #!/bin/bash
 
+python3 roberta_save_pretrained.py 
+
 service postgresql start
 echo "alter user postgres password 'password123';" | psql
 echo "drop database if exists movies;" | psql
