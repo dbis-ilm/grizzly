@@ -116,14 +116,13 @@ class DataFrame(object):
 
     return Limit(Constant(n), offset, self)
 
-  def sort_values(self, by, ascending:bool=None, order:list=None):
+  def sort_values(self, by, ascending=None):
     if not isinstance(by, list):
       by = [by]
-    if order is not None and not isinstance(order, list):
-      order = [order]
-    if order and not len(order) == len(by):
+   
+    if ascending and isinstance(ascending, list) and not len(ascending) == len(by):
       raise ValueError(f"List of columns and list of orders must be equal")
-    return Ordering(by, ascending, order, self)
+    return Ordering(by, ascending, self)
 
   def _map(self, func, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
@@ -813,7 +812,7 @@ class Limit(DataFrame):
     self.offset = offset
 
 class Ordering(DataFrame):
-  def __init__(self, by:list, ascending:bool, order:list, parent):
+  def __init__(self, by:list, ascending, parent):
     super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
     
     sortCols = []
@@ -829,7 +828,6 @@ class Ordering(DataFrame):
 
     self.by = sortCols
     self.ascending = ascending
-    self.order = order
 
 
 #########################

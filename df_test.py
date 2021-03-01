@@ -737,22 +737,11 @@ class DataFrameTest(CodeMatcher):
   def test_orderingColumnwise(self):
     df = grizzly.read_table("events") 
     df = df[["globaleventid","actor1name"]]
-    df = df.sort_values(by = ["globaleventid","actor1name"], order=["asc", "desc"])
+    df = df.sort_values(by = ["globaleventid","actor1name"], ascending=[True, False])
 
     actual = df.generateQuery()
 
     expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid asc, $t2.actor1name desc"
-
-    self.matchSnipped(actual, expected)
-
-  def test_orderingGlobalOverColumnwise(self):
-    df = grizzly.read_table("events") 
-    df = df[["globaleventid","actor1name"]]
-    df = df.sort_values(by = ["globaleventid","actor1name"], ascending=False, order=["asc", "desc"])
-
-    actual = df.generateQuery()
-
-    expected = "select * from (select $t1.globaleventid, $t1.actor1name from (select * from events $t0) $t1) $t2 order by $t2.globaleventid, $t2.actor1name DESC"
 
     self.matchSnipped(actual, expected)
 

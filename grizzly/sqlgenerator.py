@@ -202,12 +202,13 @@ class Query:
           by.append(exprSQL)
 
         direction = ""
-        # If ascending is specified, use it. Else use columnwise sort order if specified.
-        # Otherwise use default order by DBMS
+        # If ascending is not specified, default is ascending on all columns. If specifiec, it can 
+        # be a bool for the order on all columns or a list, specifying a columnwise order.
         if df.ascending is not None:
-          direction = "ASC" if df.ascending else "DESC"
-        elif (df.order):
-          by = [i + " " + j for i, j in zip(by, df.order)]
+          if isinstance(df.ascending, list):
+            by = [i + " " + ("ASC" if j else "DESC") for i, j in zip(by, df.ascending)]
+          else:
+            direction = "ASC" if df.ascending else "DESC"
         else:
           direction = "ASC"
 
