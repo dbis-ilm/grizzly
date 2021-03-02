@@ -1,6 +1,5 @@
 import psycopg2 as pg
 
-@profile
 def sql():
     import urllib
     sql = "Select * from orders_SIZE"
@@ -16,4 +15,7 @@ if __name__ == '__main__':
     os.environ["MODIN_OUT_OF_CORE"] = "true"
     os.environ["MODIN_ENGINE"] = "ray"
     import modin.pandas as pd
-    sql()
+    from memory_profiler import memory_usage
+    mem_usage = memory_usage((sql, (), {}), max_usage=True,interval=.2, timeout=1, include_children=True)
+    print(mem_usage)
+
