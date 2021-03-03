@@ -1,0 +1,15 @@
+postgresql:
+  image: postgres
+  environment:
+    POSTGRES_PASSWORD: example  
+  user: postgres
+  password: example
+  port: 5432
+  db: postgres
+
+monetdb:
+  image: monetdb/monetdb
+  user: monetdb
+  password: monetdb
+  port: 50000
+  db: demo
