@@ -688,8 +688,8 @@ class Table(DataFrame):
     self.table = table
     alias = GrizzlyGenerator._incrAndGetTupleVar()
 
-    if index and not (isinstance(index, str) or isinstance(index, list)):
-      raise ValueError("index definition must be a string or list of strings")
+    if index is not None and not (isinstance(index, str) or isinstance(index, list)):
+      raise ValueError(f"index definition must be a string or list of strings, but is {type(index)}")
 
     super().__init__([], None, alias, index)
 
