@@ -1,8 +1,7 @@
 import importlib
 import sys
 from typing import Dict
-import docker
-from docker.client import DockerClient
+
 import logging
 import yaml
 
@@ -17,7 +16,7 @@ class TestFailedException(Exception):
   def __init__(self, *args: object) -> None:
       super().__init__(*args)
 
-def startDockerContainer(dbName:str, settings, dockerClient: DockerClient):
+def startDockerContainer(dbName:str, settings, dockerClient):
 
   img = settings["image"]
   port = settings["port"]
@@ -74,6 +73,9 @@ if __name__ == "__main__":
     
     container = None
     if startContainer:
+
+      import docker
+
       client = docker.from_env()
       container = startDockerContainer(dbName,settings, client)
       logger.debug(f"created container: {container}")
