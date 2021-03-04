@@ -1,5 +1,5 @@
 import importlib
-from sys import argv
+import sys
 from typing import Dict
 import docker
 from docker.client import DockerClient
@@ -8,7 +8,7 @@ import yaml
 
 import logging.config
 
-with open('./logger.yml','rt') as f:
+with open('grizzly/it/logger.yml','rt') as f:
   config=yaml.safe_load(f.read())
 logging.config.dictConfig(config)
 logger=logging.getLogger("test")
@@ -34,7 +34,7 @@ def connectDB(dbName: str,settings: Dict):
 
   # module = __import__(dbName) 
   import importlib
-  module = importlib.import_module(dbName)
+  module = importlib.import_module(f"grizzly.it.{dbName}")
   dbUser = settings["user"]
   dbPass = settings["password"]
   dbPort = settings["port"]
@@ -49,7 +49,7 @@ def connectDB(dbName: str,settings: Dict):
 def loadTestConfig(dbName):
   
   configs = None
-  with open("itconfig.yml","r") as configFile:
+  with open("grizzly/it/itconfig.yml","r") as configFile:
     configs = yaml.load(configFile, Loader=yaml.FullLoader)
     logger.debug(f"loadded config file with {len(configs)} entries total")
     dbConf = configs[dbName]
@@ -59,7 +59,6 @@ def loadTestConfig(dbName):
 if __name__ == "__main__":
 
   logger.info("starting test setup")
-  import sys
   if len(sys.argv) < 2:
     print(f"Please provide the DB names! Got: {sys.argv}")
     exit(1)
@@ -83,7 +82,8 @@ if __name__ == "__main__":
 
       # I don't know, but I cannot write "import testrunner" 
       # but this works...
-      runner = importlib.import_module("testrunner")
+      # runner = importlib.import_module("grizzly.it.testrunner")
+      import grizzly.it.testrunner as runner
       failedTests = runner.run(dbName, dbCon, alchemyCon)
       logger.info("finished running tests")
 

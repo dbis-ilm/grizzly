@@ -11,7 +11,7 @@ logger = logging.getLogger("test")
 def initTables(con):
   logger.debug("init DB")
   lines = []
-  with open("resources/tables.sql", "rt") as f:
+  with open("grizzly/it/resources/tables.sql", "rt") as f:
     for line in f:
       lines.append(line)
 
@@ -52,7 +52,7 @@ def run(dbName: str, con, alchemyCon):
   
   failedTests = []
 
-  scriptsDir = "resources/scripts"
+  scriptsDir = "grizzly/it/resources/scripts"
 
   from os import walk
   _, _, scripts = next(walk(scriptsDir))
@@ -82,7 +82,7 @@ def run(dbName: str, con, alchemyCon):
 
 
   resultStr = "Passed" if len(failedTests) == 0 else "Failed"
-  logger.info(f"finished tests: {resultStr}")
+  logger.info(f"finished tests [{len(scripts)}]: {resultStr}")
   return failedTests
 
 def execute(scriptDir, file,con, alchemyCon):
