@@ -1,4 +1,4 @@
-image: python:latest
+
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -15,12 +15,26 @@ cache:
     - .cache/pip
     - venv/
 
-before_script:
+before_script:unittest:
   - python -V  # Print out python version for debugging
   - pip install psycopg2 pytest-coverage beautifultable pyyaml
 
-test:
+test:unittest:
+  image: python:latest
   tags: 
     - grouprunner
   script:
     pytest --cov=. *_test.py
+
+
+
+before_script:monetdb:
+  - python -V  # Print out python version for debugging
+  - pip install pyyaml sqlalchemy_monetdb pymonetdb
+
+test:monetdb:
+  image: monetdb/monetdb
+  tags:
+    - grouprunner
+  script:
+    python -m grizzly.it.itest nodocker monetdb
