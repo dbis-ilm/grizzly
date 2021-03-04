@@ -15,26 +15,25 @@ cache:
     - .cache/pip
     - venv/
 
-before_script:unittest:
-  - python -V  # Print out python version for debugging
-  - pip install psycopg2 pytest-coverage beautifultable pyyaml
+
 
 test:unittest:
   image: python:latest
   tags: 
     - grouprunner
+  before_script:
+    - python -V  # Print out python version for debugging
+    - pip install psycopg2 pytest-coverage beautifultable pyyaml
   script:
     pytest --cov=. *_test.py
 
-
-
-before_script:monetdb:
-  - python -V  # Print out python version for debugging
-  - pip install pyyaml sqlalchemy_monetdb pymonetdb
 
 test:monetdb:
   image: monetdb/monetdb
   tags:
     - grouprunner
+  before_script:
+    - python -V  # Print out python version for debugging
+    - pip install pyyaml sqlalchemy_monetdb pymonetdb
   script:
     python -m grizzly.it.itest nodocker monetdb
