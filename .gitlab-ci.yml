@@ -34,8 +34,7 @@ test:monetdb:
     - grouprunner
   before_script:
     - python -V  # Print out python version for debugging
-    - whoami
-    - pwd
-    - pip install pyyaml sqlalchemy_monetdb pymonetdb pandas
+    - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
+    - monetdbd start -n /var/monetdb5/dbfarm
   script:
     python -m grizzly.it.itest nodocker monetdb
