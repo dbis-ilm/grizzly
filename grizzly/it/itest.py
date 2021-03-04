@@ -17,7 +17,7 @@ class TestFailedException(Exception):
   def __init__(self, *args: object) -> None:
       super().__init__(*args)
 
-def startContainer(dbName:str, settings, dockerClient: DockerClient):
+def startDockerContainer(dbName:str, settings, dockerClient: DockerClient):
 
   img = settings["image"]
   port = settings["port"]
@@ -59,20 +59,24 @@ def loadTestConfig(dbName):
 if __name__ == "__main__":
 
   logger.info("starting test setup")
-  if len(sys.argv) < 2:
-    print(f"Please provide the DB names! Got: {sys.argv}")
+  if len(sys.argv) < 3:
+    print(f"Please provide flag to indicate container start [docker] and the DB names! Got: {sys.argv}")
     exit(1)
+
+  startContainer = sys.argv[1].strip().lower() != "nodocker"
 
   summary = {}
 
-  for i in range (1,len(sys.argv)):
+  for i in range (2,len(sys.argv)):
     dbName = sys.argv[i]
     settings = loadTestConfig(dbName)
     logger.debug(f"db config has {len(settings)} entries")
     
-    client = docker.from_env()
-    container = startContainer(dbName,settings, client)
-    logger.debug(f"created container: {container}")
+    container = None
+    if startContainer:
+      client = docker.from_env()
+      container = startDockerContainer(dbName,settings, client)
+      logger.debug(f"created container: {container}")
 
     try:
       (dbCon,alchemyCon) = connectDB(dbName, settings)
@@ -90,8 +94,8 @@ if __name__ == "__main__":
       summary[dbName] = failedTests
 
     finally:
-      logger.debug("cleaning up")
       if container is not None:
+        logger.debug("cleaning up")
         container.stop()
         logger.info(f"stopped container {container}")
 
