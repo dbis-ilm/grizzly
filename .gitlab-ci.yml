@@ -1,5 +1,4 @@
 
-
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
 variables:
@@ -38,3 +37,16 @@ test:monetdb:
     - monetdbd start -n /var/monetdb5/dbfarm &
   script:
     python -m grizzly.it.itest nodocker monetdb
+
+test:postgresql:
+  image: postgres
+  tags:
+    - grouprunner
+  before_script:
+    - apt update
+    - apt install -y python3 python3-pip
+    - python3 -V  # Print out python version for debugging
+    - pip3 install wheel pyyaml psycopg2-binary pandas sqlalchemy
+    - /docker-entrypoint.sh postgres &
+  script:
+    python3 -m grizzly.it.itest nodocker postgresql
