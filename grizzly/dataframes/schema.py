@@ -55,6 +55,18 @@ class Schema(object):
 
     return Schema(newSchema)
 
+  @staticmethod
+  def fromList(schemaList):
+    d = {}
+    for e in schemaList:
+      kv = e.split(":")
+      colName = kv[0]
+      dtype= kv[1]
+
+      grizzlyType = ColType.fromString(dtype)
+      d[colName] = grizzlyType
+
+    return Schema(d)
 
   def __len__(self):
     if self.typeDict is None:

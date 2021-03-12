@@ -745,7 +745,9 @@ class ExternalTable(DataFrame):
     self.fdw_extension_name = fdw_extension_name
     alias = GrizzlyGenerator._incrAndGetTupleVar()
     self.table = f"temp_ext_table{alias}"
-    super().__init__([], None, alias)
+
+    theSchema = Schema.fromList(schema)
+    super().__init__(theSchema, None, alias)
 
 class Projection(DataFrame):
 
