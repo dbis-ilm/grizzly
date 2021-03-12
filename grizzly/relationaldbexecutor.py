@@ -70,7 +70,7 @@ class RelationalExecutor(object):
     for row in rs:
       # if the driver returns the tuple as some specialiced class (e.g. a Row implementation) 
       # we hide this by converting it into a Python list
-      rowAsList = [elem for elem in row]
+      rowAsList = [str(elem) for elem in row]
       tuples.append(rowAsList)
 
     return tuples
