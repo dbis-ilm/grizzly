@@ -420,8 +420,18 @@ class SQLGenerator:
           pre += exprPre
           by.append(exprSQL)
 
+        direction = ""
+        # If ascending is not specified, default is ascending on all columns. If specifiec, it can 
+        # be a bool for the order on all columns or a list, specifying a columnwise order.
+        if df.ascending is not None:
+          if isinstance(df.ascending, list):
+            by = [i + " " + ("ASC" if j else "DESC") for i, j in zip(by, df.ascending)]
+          else:
+            direction = "ASC" if df.ascending else "DESC"
+        else:
+          direction = "ASC"
+
         by = ",".join(by)
-        direction = "ASC" if df.ascending else "DESC"
 
         qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
 
