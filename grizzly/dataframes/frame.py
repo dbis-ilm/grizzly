@@ -371,9 +371,12 @@ class DataFrame(object):
       else:
         newCol = ComputedCol(value, key)
 
+
       self.computedCols.append(newCol)
+      self.schema.append(newCol)
     else: # not am expr or DF -> must be a constant
       newCol = ComputedCol(Constant(value), key)
+      self.schema.append(newCol)
       self.computedCols.append(newCol)
 
   # magic function for read access by index: []
@@ -449,6 +452,26 @@ class DataFrame(object):
     return GrizzlyGenerator.collect(self, includeHeader)
 
   # Pandas DF stuff
+
+  def describe(self):
+    # min, max, (avg), count, count distinct
+
+    unioned = None
+    for col in self.schema.columns(lambda t : t[1] == ColType.NUMERIC):
+      ref = ColRef(col, self)
+      fMin = FuncCall(AggregateType.MIN, [ref],alias = "min")
+      fMax = FuncCall(AggregateType.MAX, [ref],alias = "max")
+      fAvg = FuncCall(AggregateType.MEAN, [ref],alias = "mean")
+      fCount = FuncCall(AggregateType.COUNT, [ref], alias ="count")
+
+      p = self.project([fMin, fMax, fAvg, fCount])
+      if unioned is None:
+        unioned = p
+      else:
+        unioned = unioned.union(p)
+
+    return unioned
+
 
   def __len__(self) -> int:
     f = FuncCall(AggregateType.COUNT, [AllColumns(self)],None, "rowcount")
@@ -626,7 +649,6 @@ class DataFrame(object):
     else:
       # SUM only over numeric columns
       return self.__genTableAgg(col, AggregateType.SUM, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
-
 
   def __genTableAgg(self, col, aggType, filterFunc):
     if not self.schema and col is None:

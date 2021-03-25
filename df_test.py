@@ -2,56 +2,15 @@ from grizzly.dataframes.schema import ColType, SchemaError
 from grizzly.expression import ExpressionException
 import unittest
 import sqlite3
-
 import re
+
+from matcher import CodeMatcher
+
 
 import grizzly
 from grizzly.aggregates import AggregateType
 from grizzly.sqlgenerator import SQLGenerator
 from grizzly.relationaldbexecutor import RelationalExecutor
-
-class CodeMatcher(unittest.TestCase):
-  
-
-  def matchSnipped(self, snipped, template, removeLinebreaks: bool = False):
-    res, mapping, reason = CodeMatcher.doMatchSnipped(snipped.strip(), template.strip(),removeLinebreaks)
-    if not res:
-      mapstr = "with mapping:\n"
-      for templ,tVar in mapping.items():
-        mapstr += f"\t{templ} -> {tVar}\n"
-      self.fail(f"Mismatch\nFound:    {snipped}\nExpected: {template}\nReason:\t{reason}\n{mapstr}")
-      
-
-  @staticmethod
-  def doMatchSnipped(snipped, template, removeLinebreaks):
-    pattern = re.compile(r"\$t[0-9]+")
-    pattern2 = re.compile("_t[0-9]+")
-
-    placeholders = pattern.findall(template)
-    occurences = pattern2.findall(snipped)
-
-    mapping = {}
-    for p,o in zip(placeholders, occurences):
-      if p not in mapping:
-        mapping[p] = o
-      elif p in mapping and mapping[p] != o:
-        return False, mapping, f"Mapping error: {p} -> {mapping[p]} exists, but {p} -> {o} found"
-
-    # if we get here, the occurences match the templates
-
-    if len(placeholders) != len(occurences):
-      return False, mapping, f"number of placeholders {len(placeholders)} does not match occurences {len(occurences)}"
-
-    for (k,v) in mapping.items():
-      template = template.replace(k,v)
-
-    templateClean = template.replace("\n","").replace(" ","").lower()
-    snippedClean = snipped.replace("\n","").replace(" ","").lower()
-    
-    matches = snippedClean == templateClean
-
-    return matches, mapping, "Snipped does not match template" if not matches else ""
-
 
 class DataFrameTest(CodeMatcher):
 
@@ -1191,6 +1150,65 @@ return apply(input)
     self.assertEqual(df.schema["globaleventid"], ColType.NUMERIC)
     self.assertEqual(df.schema["actiongeo_long"], ColType.NUMERIC)
     self.assertEqual(df.schema["actor1name"], ColType.TEXT)
+
+  def test_describeTable(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    # df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
+    actual = df.describe().generateQuery()
+    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT * from t3 $t0) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT * from t3 $t0) $t2"
+
+    self.matchSnipped(actual, expected)
+
+  def test_describeQuery(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
+    actual = df.describe().generateQuery()
+    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from t3 $t0) $t3) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from t3 $t0) $t3) $t2"
+
+    self.matchSnipped(actual, expected)
+
+  def test_describeFunc(self):
+
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend.queryGenerator
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
+
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[df.globaleventid]
+
+    def myfunc(i: str) -> int:
+      l = len(i)
+      l = l + l
+      return l
+
+    # self.fail("UDF is created twice.")
+    # FIXME: we need to check if the code to create in pre query already exists
+    # maybe some kind of dict. Or we could use CTEs for the query and use the CTE in describe
+    # WITH (SELECT a,b FROM ..) AS cte_t0
+    # SELECT min(a), max(a), ... FROM cte_t0
+    # UNION ALL
+    # SELECT min(b), max(b), ... FROM cte_t0
+
+    df["newcol"] = df["actor1name"].map(myfunc)
+    actual = df.describe().generateQuery()
+    expected = """CREATE OR REPLACE FUNCTION myfunc(i varchar(1024)) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
+    l = l + l
+    return l
+    ' parallel safe;;CREATE OR REPLACE FUNCTION myfunc(i varchar(1024)) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
+    l = l + l
+    return l
+    ' parallel safe;
+    SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from t3 $t0) $t4) $t1 
+    UNION ALL 
+    SELECT min($t3.newcol) as min, max($t3.newcol) as max, avg($t3.newcol) as mean, count($t3.newcol) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from t3 $t0) $t4) $t3"""
+    ""
+
+
+    GrizzlyGenerator._backend.queryGenerator = oldGen
+
+    self.matchSnipped(actual, expected, removeLinebreaks=True)
 
 if __name__ == "__main__":
     unittest.main()
