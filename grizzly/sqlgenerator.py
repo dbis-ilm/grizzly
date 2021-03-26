@@ -1,284 +1,14 @@
+from grizzly.dataframes.schema import ColType
+from grizzly.config import Config
 from grizzly.aggregates import AggregateType
-from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
-from grizzly.expression import ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
+from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame, Union
+from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 
-from typing import List, Tuple
-from pathlib import Path
-import os
+from typing import List, Set, Tuple
 
 import logging
 logger = logging.getLogger(__name__)
-
-class Query:
-
-  def __init__(self, generator):
-    self.generator = generator
-
-  def _buildFrom(self,df) -> Tuple[List[str], str, str]:
-
-    if df is not None:
-
-      computedCols = []
-      preCode = []
-
-      for x in df.computedCols:
-        (exprPre, exprSQL) = self.generator._exprToSQL(x)
-        preCode += exprPre
-        computedCols.append(exprSQL)
-
-      computedCols = ",".join(computedCols)
-
-      if isinstance(df,Table):
-        proj = "*"
-        if computedCols:
-          proj += ","+computedCols
-          
-        return (preCode, f"SELECT {proj} FROM {df.table} {df.alias}")
-        
-
-      elif isinstance(df, ExternalTable):
-        proj = "*"
-        if computedCols:
-          proj += ","+computedCols
-
-        tablePre = SQLGenerator._generateCreateExtTable(df, self.generator.templates)
-        qry = f"SELECT {proj} FROM {df.table} {df.alias}"
-
-        return (preCode + tablePre, qry)
-
-      elif isinstance(df,Projection):
-        subQry = Query(self.generator)
-        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
-
-        prefixed = "*"
-        if df.columns:
-          prefixed = []
-
-          for attr in df.columns:
-            (ePre, exprSQL) = self.generator._exprToSQL(attr)
-
-            pre += ePre
-            prefixed.append(exprSQL)
-          
-          prefixed = ",".join(prefixed)
-
-        if computedCols:
-          prefixed += ","+computedCols
-
-        qry = f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}"
-        
-        return (preCode + pre, qry)
-
-      elif isinstance(df,Filter):
-        subQry = Query(self.generator)
-        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
-
-        (exprPre,exprStr) = self.generator._exprToSQL(df.expr)
-
-        proj = "*"
-        if computedCols:
-          proj += ","+computedCols
-
-        qry = f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}"
-
-        return (preCode + pre + exprPre, qry)
-
-      elif isinstance(df, Join):
-
-        lQry = Query(self.generator)
-        (lpre,lparentSQL) = lQry._buildFrom(df.leftParent())
-
-        rQry = Query(self.generator)
-        (rpre,rparentSQL) = rQry._buildFrom(df.rightParent())
-
-        lAlias = df.leftParent().alias
-        rAlias = df.rightParent().alias
-
-        if isinstance(df.on, ColRef):
-          (exprPre, onSQL) = self.generator._exprToSQL(df.on)
-          onSQL = f"USING ({onSQL})"
-          preCode += exprPre
-        elif isinstance(df.on, LogicExpr) or isinstance(df.on, BoolExpr):
-          (exprPre, onSQL) = self.generator._exprToSQL(df.on)
-          onSQL = "ON " + onSQL
-          preCode += exprPre
-        elif isinstance(df.on, list):
-
-          if len(df.on) != 2:
-            raise ExpressionException("on condition must consist of exacltly two columns")
-
-          (lOnPre,lOn) = self.generator._exprToSQL(df.on[0])
-          (rOnPre,rOn) = self.generator._exprToSQL(df.on[1])
-
-          onSQL = f"ON {lOn} {df.comp} {rOn}"
-          preCode += lOnPre
-          preCode += rOnPre
-        else:
-          onSQL = "" # let the DB figure it out itself
-
-        proj = "*"
-        if computedCols:
-          proj += ","+computedCols
-
-        joinSQL = f"SELECT {proj} FROM ({lparentSQL}) {lAlias} {df.how} JOIN ({rparentSQL}) {rAlias} {onSQL}"
-
-        return (preCode + lpre + rpre, joinSQL)
-
-      elif isinstance(df, Grouping):
-        subQry = Query(self.generator)
-        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
-
-        byCols = []
-        for attr in df.groupCols:
-          (exprPre, exprSQL) = self.generator._exprToSQL(attr)
-          pre += exprPre
-          byCols.append(exprSQL)
-
-        by = ",".join(byCols)
-
-        funcCode = ""
-        for f in df.aggFunc:
-          (fPre,fCode) = self.generator._generateFuncCall(f)
-          pre += fPre
-          funcCode += ", " + fCode
-        
-        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {by}"
-
-        havings = []
-        if df.having:
-          for h in df.having:
-            (hPre,hSQL) = self.generator._exprToSQL(h)
-            pre += hPre
-            havings.append(hSQL)
-
-          exprStr = " AND ".join(havings)
-          groupSQL += f" HAVING {exprStr}"
-
-        #if the computed column is an aggregate over the groups, 
-        # it should not be added as an extra query, but rather 
-        # merged into this projection list
-        if computedCols: 
-          tVar = GrizzlyGenerator._incrAndGetTupleVar()
-          proj = "*,"+computedCols
-          groupSQL = f"SELECT {proj} FROM {groupSQL} {tVar}"
-
-        return (preCode + pre, groupSQL)
-
-      elif isinstance(df, Limit):
-        subQry = Query(self.generator)
-        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
-
-        limitClause = self.generator.templates["limit"].lower()
-
-        (lPre,limitExpr) = self.generator._exprToSQL(df.limit)
-        pre += lPre
-        
-
-        limitSQL = None
-        if limitClause == "top":
-          limitSQL = f"SELECT TOP {limitExpr} {df.alias}.* FROM ({parentSQL}) {df.alias}"
-        elif limitClause == "limit":
-          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {limitExpr}"
-        else:
-          raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
-
-        if df.offset is not None:
-          (oPre, offsetExpr) = self.generator._exprToSQL(df.offset)
-          pre += oPre
-          limitSQL += f" OFFSET {offsetExpr}"
-
-
-        return (preCode+pre, limitSQL)
-      
-      elif isinstance(df, Ordering):
-        subQry = Query(self.generator)
-        (pre,parentSQL) = subQry._buildFrom(df.parents[0])
-
-        by = []
-        for attr in df.by:
-          (exprPre, exprSQL) = self.generator._exprToSQL(attr)
-          pre += exprPre
-          by.append(exprSQL)
-
-        direction = ""
-        # If ascending is not specified, default is ascending on all columns. If specifiec, it can 
-        # be a bool for the order on all columns or a list, specifying a columnwise order.
-        if df.ascending is not None:
-          if isinstance(df.ascending, list):
-            by = [i + " " + ("ASC" if j else "DESC") for i, j in zip(by, df.ascending)]
-          else:
-            direction = "ASC" if df.ascending else "DESC"
-        else:
-          direction = "ASC"
-
-        by = ",".join(by)
-
-        qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
-
-        return (preCode+pre, qry)
-
-      else:
-        raise ValueError(f"unsupported operator {type(df)}")
-
-    else:
-      return ""
-
-
-class Config:
-
-  @staticmethod
-  def loadProfile(profile: str):
-    logger.debug("loading configs for profile %s",profile)
-    if not profile:
-      return Config(profile, dict())
-
-    configDir = Path.home().joinpath(".config","grizzly")
-    locations = [Path.cwd(), configDir]
-
-    confFileName = "grizzly.yml"
-
-    path = None
-    for loc in locations:
-      p = loc.joinpath(confFileName)
-      if p.exists():
-        path = p
-        logger.debug(f"found config file in: {str(path)}")
-        break
-
-    if not path: # as not found in expected locations
-      logger.debug(f"Cannot find config file {confFileName} in {[str(l) for l in locations]} - creating default in {str(configDir)}...")
-      # load packaged ressource
-      import pkg_resources 
-      my_data = pkg_resources.resource_string(__name__, "grizzly.yml").decode("utf-8") 
-      
-      filename = configDir.joinpath(confFileName)
-      os.makedirs(os.path.dirname(filename), exist_ok=True) # create config directory
-      with open(filename,'w') as target:
-        target.writelines(my_data) # copy 
-
-      logger.debug("done")
-      path = filename # use below
-
-
-    import yaml
-    configs = None
-    with open(path,"r") as configFile:
-      configs = yaml.load(configFile, Loader=yaml.FullLoader)
-
-    return Config(profile, configs[profile])
-
-
-  def __init__(self, profile, config):
-    self.profile = profile
-    self.config = config
-
-  def __getitem__(self, key: str):
-    if key in self.config:
-      return self.config[key]
-    else:
-      raise ValueError(f"Unsupported configuration key {key} in profile {self.profile}")
-
 
 from typing import NewType
 SqlBigInt = NewType("bigint", int)
@@ -313,6 +43,25 @@ class SQLGenerator:
     else: 
       return pythonType
 
+  @staticmethod
+  def _mapFromSQLTypes(sqlType: str):
+    if sqlType is None:
+      return ColType.UNKNOWN
+
+    sqlType = sqlType.strip().lower()
+
+    if sqlType.startswith("int") or sqlType == "bigint" or sqlType.startswith("float") or sqlType.startswith("double") or sqlType.startswith("tiny"):
+      return ColType.NUMERIC
+    
+    elif sqlType.startswith("varchar") or sqlType.startswith("char") or sqlType.startswith("text"):
+      return ColType.TEXT
+
+    elif sqlType.startswith("bool"):
+      return ColType.BOOL
+
+    else:
+      return ColType.UNKNOWN
+
   def _exprToSQL(self, expr) -> Tuple[List[str], str]:
     exprSQL = ""
     pre = []
@@ -322,12 +71,14 @@ class SQLGenerator:
       exprSQL = "NULL"
 
     elif isinstance(expr,str):
-      exprSQL = expr # TODO: currently to handle *, but maybe this should done earlier and be converted into a special ColRef?
+      raise ValueError(f"string is not an expresion! {expr}")
+      # exprSQL = expr # TODO: currently to handle *, but maybe this should done earlier and be converted into a special ColRef?
     
     # we were given a constant
     elif isinstance(expr, Constant):
+      alias = f"as {expr.alias}" if expr.alias is not None else ""
       if isinstance(expr.value, str):
-        exprSQL = f"'{expr.value}'"
+        exprSQL = f"'{expr.value}' {alias}"
       elif isinstance(expr.value, list):
         
         eSQLs = []
@@ -340,7 +91,7 @@ class SQLGenerator:
         exprSQL = f"({exprSQL})"
 
       else:
-        exprSQL = f"{expr.value}"
+        exprSQL = f"{expr.value} {alias}"
 
     # TODO: should LogicExpr be merged into BoolExpr ? 
     elif isinstance(expr, LogicExpr):
@@ -364,6 +115,26 @@ class SQLGenerator:
       else:
         raise ExpressionException(f"unknown logical operation: {expr.operand}")
 
+      pre = lPre + rPre
+
+    elif isinstance(expr, SetExpr): # must be handled before BoolExpr
+      (lPre,l) = self._exprToSQL(expr.left)
+
+      if isinstance(expr.right, list):
+        (rPre, r) = ([], ",".join([str(x) for x in expr.right]))
+      else: # should be a DF
+        (rPre,r) = self._exprToSQL(expr.right)
+
+      if not isinstance(expr.left, ColRef) and not isinstance(expr.left, Constant):
+        l = f"({l})"
+      if not isinstance(expr.right, ColRef) and not isinstance(expr.right, Constant):
+        r = f"({r})"
+
+      opStr = "UNKNOWN"
+      if expr.operand == SetOperation.IN:
+        opStr = "IN"
+
+      exprSQL = f"{l} {opStr} {r}"
       pre = lPre + rPre
 
     elif isinstance(expr, BoolExpr):
@@ -417,36 +188,20 @@ class SQLGenerator:
       exprSQL = f"{l} {opStr} {r}"
       pre = lPre + rPre
 
-    elif isinstance(expr, SetExpr):
-      (lPre,l) = self._exprToSQL(expr.left)
-
-      if isinstance(expr.right, list):
-        (rPre, r) = ([], ",".join([str(x) for x in expr.right]))
-      else: # should be a DF
-        (rPre,r) = self._exprToSQL(expr.right)
-
-      if not isinstance(expr.left, ColRef) and not isinstance(expr.left, Constant):
-        l = f"({l})"
-      if not isinstance(expr.right, ColRef) and not isinstance(expr.right, Constant):
-        r = f"({r})"
-
-      opStr = "UNKNOWN"
-      if expr.operand == SetOperation.IN:
-        opStr = "IN"
-
-      exprSQL = f"{l} {opStr} {r}"
-      pre = lPre + rPre
+    
 
     # if the thing to produce is a DataFrame, we probably have a subquery
     elif isinstance(expr, DataFrame): 
       # if right hand side is a DataFrame, we need to create code first 
-      subQry = Query(self)
-      (pre,exprSQL) = subQry._buildFrom(expr)
+      (pre,exprSQL) = self._buildFrom(expr)
       
+    elif isinstance(expr, AllColumns): # must be checked befor ColRef!
+      exprSQL = "*"
 
     # it's a plain column reference  
     elif isinstance(expr, ColRef):
-      if expr.df and expr.column != "*":
+
+      if expr.df is not None:
         exprSQL = f"{expr.df.alias}.{expr.column}"
       else:
         exprSQL = expr.column
@@ -461,7 +216,7 @@ class SQLGenerator:
       if not isinstance(expr.value, FuncCall):
         exprSQL = f"({exprSQL})"
 
-        if expr.alias:
+        if expr.alias is not None and expr.alias != "":
           exprSQL = f"{exprSQL} as {expr.alias}"      
 
     # it's a function call -> produce CREATE func if necessary and call
@@ -474,6 +229,220 @@ class SQLGenerator:
       raise ExpressionException(f"don't know how to handle {expr}")
 
     return (pre,exprSQL)
+
+  def _buildFrom(self,df) -> Tuple[List[str], str, str]:
+
+    if df is not None:
+
+      computedCols = []
+      preCode = []
+
+      for x in df.computedCols:
+        (exprPre, exprSQL) = self._exprToSQL(x)
+        preCode += exprPre
+        computedCols.append(exprSQL)
+
+      computedCols = ",".join(computedCols)
+
+      if isinstance(df,Table):
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+          
+        return (preCode, f"SELECT {proj} FROM {df.table} {df.alias}")
+        
+
+      elif isinstance(df, ExternalTable):
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+
+        tablePre = SQLGenerator._generateCreateExtTable(df, self.templates)
+        qry = f"SELECT {proj} FROM {df.table} {df.alias}"
+
+        return (preCode + tablePre, qry)
+
+      elif isinstance(df,Projection):
+        (pre,parentSQL) = self._buildFrom(df.parents[0])
+
+        prefixed = "*"
+        if df.columns:
+          prefixed = []
+
+          for attr in df.columns:
+            (ePre, exprSQL) = self._exprToSQL(attr)
+
+            pre += ePre
+            prefixed.append(exprSQL)
+          
+          prefixed = ",".join(prefixed)
+
+        if computedCols:
+          prefixed += ","+computedCols
+
+        qry = f"SELECT { 'DISTINCT ' if df.doDistinct else ''}{prefixed} FROM ({parentSQL}) {df.alias}"
+        
+        return (preCode + pre, qry)
+
+      elif isinstance(df,Filter):
+        (pre,parentSQL) = self._buildFrom(df.parents[0])
+
+        (exprPre,exprStr) = self._exprToSQL(df.expr)
+
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+
+        qry = f"SELECT {proj} FROM ({parentSQL}) {df.alias} WHERE {exprStr}"
+
+        return (preCode + pre + exprPre, qry)
+
+      elif isinstance(df, Join):
+
+        (lpre,lparentSQL) = self._buildFrom(df.leftParent())
+
+        (rpre,rparentSQL) = self._buildFrom(df.rightParent())
+
+        lAlias = df.leftParent().alias
+        rAlias = df.rightParent().alias
+
+        if isinstance(df.on, ColRef):
+          (exprPre, onSQL) = self._exprToSQL(df.on)
+          onSQL = f"USING ({onSQL})"
+          preCode += exprPre
+        elif isinstance(df.on, LogicExpr) or isinstance(df.on, BoolExpr):
+          (exprPre, onSQL) = self._exprToSQL(df.on)
+          onSQL = "ON " + onSQL
+          preCode += exprPre
+        elif isinstance(df.on, list):
+
+          if len(df.on) != 2:
+            raise ExpressionException("on condition must consist of exacltly two columns")
+
+          (lOnPre,lOn) = self._exprToSQL(df.on[0])
+          (rOnPre,rOn) = self._exprToSQL(df.on[1])
+
+          onSQL = f"ON {lOn} {df.comp} {rOn}"
+          preCode += lOnPre
+          preCode += rOnPre
+        else:
+          onSQL = "" # let the DB figure it out itself
+
+        proj = "*"
+        if computedCols:
+          proj += ","+computedCols
+
+        joinSQL = f"SELECT {proj} FROM ({lparentSQL}) {lAlias} {df.how} JOIN ({rparentSQL}) {rAlias} {onSQL}"
+
+        return (preCode + lpre + rpre, joinSQL)
+
+      elif isinstance(df, Union):
+        (lpre,lparentSQL) = self._buildFrom(df.leftParent())
+
+        (rpre,rparentSQL) = self._buildFrom(df.rightParent())
+
+        allKW = "ALL" if not df.distinct else ""
+
+        unionSQL = f"{lparentSQL} UNION {allKW} {rparentSQL}"
+
+        return (preCode + lpre + rpre, unionSQL)
+
+      elif isinstance(df, Grouping):
+        (pre,parentSQL) = self._buildFrom(df.parents[0])
+
+        byCols = []
+        for attr in df.groupCols:
+          (exprPre, exprSQL) = self._exprToSQL(attr)
+          pre += exprPre
+          byCols.append(exprSQL)
+
+        by = ",".join(byCols)
+
+        funcCode = ""
+        for f in df.aggFunc:
+          (fPre,fCode) = self._generateFuncCall(f)
+          pre += fPre
+          funcCode += ", " + fCode
+        
+        groupSQL = f"SELECT {by} {funcCode} FROM ({parentSQL}) {df.alias} GROUP BY {by}"
+
+        havings = []
+        if df.having:
+          for h in df.having:
+            (hPre,hSQL) = self._exprToSQL(h)
+            pre += hPre
+            havings.append(hSQL)
+
+          exprStr = " AND ".join(havings)
+          groupSQL += f" HAVING {exprStr}"
+
+        #if the computed column is an aggregate over the groups, 
+        # it should not be added as an extra query, but rather 
+        # merged into this projection list
+        if computedCols: 
+          tVar = GrizzlyGenerator._incrAndGetTupleVar()
+          proj = "*,"+computedCols
+          groupSQL = f"SELECT {proj} FROM {groupSQL} {tVar}"
+
+        return (preCode + pre, groupSQL)
+
+      elif isinstance(df, Limit):
+        (pre,parentSQL) = self._buildFrom(df.parents[0])
+
+        limitClause = self.templates["limit"].lower()
+
+        (lPre,limitExpr) = self._exprToSQL(df.limit)
+        pre += lPre
+        
+
+        limitSQL = None
+        if limitClause == "top":
+          limitSQL = f"SELECT TOP {limitExpr} {df.alias}.* FROM ({parentSQL}) {df.alias}"
+        elif limitClause == "limit":
+          limitSQL = f"SELECT {df.alias}.* FROM ({parentSQL}) {df.alias} LIMIT {limitExpr}"
+        else:
+          raise ValueError(f"Unknown keyword for LIMIT: {limitClause}")
+
+        if df.offset is not None:
+          (oPre, offsetExpr) = self._exprToSQL(df.offset)
+          pre += oPre
+          limitSQL += f" OFFSET {offsetExpr}"
+
+
+        return (preCode+pre, limitSQL)
+      
+      elif isinstance(df, Ordering):
+        (pre,parentSQL) = self._buildFrom(df.parents[0])
+
+        by = []
+        for attr in df.by:
+          (exprPre, exprSQL) = self._exprToSQL(attr)
+          pre += exprPre
+          by.append(exprSQL)
+
+        direction = ""
+        # If ascending is not specified, default is ascending on all columns. If specifiec, it can 
+        # be a bool for the order on all columns or a list, specifying a columnwise order.
+        if df.ascending is not None:
+          if isinstance(df.ascending, list):
+            by = [i + " " + ("ASC" if j else "DESC") for i, j in zip(by, df.ascending)]
+          else:
+            direction = "ASC" if df.ascending else "DESC"
+        else:
+          direction = "ASC"
+
+        by = ",".join(by)
+
+        qry = f"SELECT * FROM ({parentSQL}) {df.alias} ORDER BY {by} {direction}"
+
+        return (preCode+pre, qry)
+
+      else:
+        raise ValueError(f"unsupported operator {type(df)}")
+
+    else:
+      return ""
+
 
   @staticmethod
   def _generateCreateFunc(udf: UDF, templates) -> str:
@@ -506,7 +475,7 @@ class SQLGenerator:
       if aggType == AggregateType.MEAN:
         return "avg"
 
-      return str(aggType)[len("AggregateType."):].lower()
+      return AggregateType.getName(aggType)
 
     # if we get here it's not a string and not a AggType --> error
     raise ExpressionException(f"invalid function value: {aggType}, expected string or AggregateType, but got {type(aggType)}")
@@ -571,7 +540,7 @@ class SQLGenerator:
     return queries
 
   
-  def _generateAggCode(self, df, f) -> Tuple[List[str],str]:
+  def _generateAggCode(self, df, f) -> Tuple[Set[str],str]:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
@@ -585,10 +554,52 @@ class SQLGenerator:
       (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
 
-    return (pre+fPre, aggSQL)
+    preQuery = SQLGenerator._makeUnique(pre + fPre)
 
-  def generate(self, df) -> Tuple[List[str],str]:
-    qry = Query(self)
-    (preQueryCode, qryString) = qry._buildFrom(df)
+    return (preQuery, aggSQL)
+
+  def generate(self, df) -> Tuple[Set[str],str]:
+    (preQueryCode, qryString) = self._buildFrom(df)
+
+    preQueryCode = SQLGenerator._makeUnique(preQueryCode)
 
     return (preQueryCode, qryString)
+
+  def getTableSchema(self, tableName):
+    
+    qry = None
+    columnNames = None
+    columnTypes = None
+    if "schema_query" in self.templates: 
+      qry = self.templates["schema_query"]
+      qry = qry.replace("$$tablename$$",tableName)
+      columnNames = self.templates["colname_column"]
+      columnTypes = self.templates["coltype_column"]
+    elif "schema_table" in self.templates:
+      schematable = self.templates["schema_table"]
+      tablenameCol = self.templates["tablename_column"]
+      colname_column = self.templates["colname_column"]
+      coltype_column = self.templates["coltype_column"]
+      qry = f"SELECT {colname_column}, {coltype_column} FROM {schematable} where {tablenameCol} = '{tableName}'"
+      columnNames = 0
+      columnTypes = 1
+
+    return (qry, columnNames, columnTypes)
+
+
+  @staticmethod
+  def _makeUnique(preQueries: List[str]) -> List[str]:
+
+    result = []
+    hashes = set()
+
+    if isinstance(preQueries, str):
+      return [preQueries]
+
+    for pq in preQueries:
+      h = hash(pq)
+      if h not in hashes:
+        result.append(pq)
+        hashes.add(h)
+
+    return result

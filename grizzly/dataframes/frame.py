@@ -1,7 +1,8 @@
+from grizzly.dataframes.schema import ColType, Schema, SchemaError
 from grizzly.aggregates import AggregateType
 import queue
 from typing import List, Tuple, Callable
-from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr, BooleanOperation, SetExpr, SetOperation
+from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr, BooleanOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
@@ -22,18 +23,17 @@ class GrizzlyIndexError(Exception):
 
 class DataFrame(object):
 
-  def __init__(self, columns, parents, alias: str = "", index=None):
+  def __init__(self, schema, parents, alias: str = "", index=None):
     super(DataFrame, self).__init__()
 
     self.index = index
 
-    if not columns:
-      self.columns = []
-    elif not isinstance(columns, list):
-      self.columns = [columns]
-    else:
-      self.columns = columns
+    if isinstance(schema, dict):
+      schema = Schema(dict)
+    elif schema is None:
+      schema = Schema(schema)
 
+    self._schema = schema
     self.computedCols = []
 
     if parents is None or type(parents) is list:
@@ -42,6 +42,10 @@ class DataFrame(object):
       self.parents = [parents]
 
     self.alias = alias
+
+  @property
+  def schema(self):
+    return self._schema
 
   def updateRef(self, x):                                                                                               
     if isinstance(x,ColRef):                                                                                            
@@ -64,14 +68,11 @@ class DataFrame(object):
       return x
 
   def hasColumn(self, colName):
-    if not self.columns:
+    if len(self.schema) <= 0:
       return True
 
-    for ref in self.columns:
-      if ref.column == colName:
-        return True
-
-    return False
+    hasCol = colName.lower() in self.schema
+    return hasCol
 
   def filter(self, expr):
     return Filter(expr, self)
@@ -105,6 +106,18 @@ class DataFrame(object):
       on = [lOn, rOn]
 
     return Join(self, other, on, how, comp)
+
+  def union(self, other, distinct = False, by = None):
+    left = self
+    right = other
+    if by is not None:
+      if not isinstance(by, list):
+        raise ValueError(f"by clause for union must be a list of columns, but got {by}")
+
+      left = self.project(by)
+      right = other.project(by)
+
+    return Union(left, right, distinct)
 
   def groupby(self, groupCols):
     if not isinstance(groupCols, list):
@@ -144,7 +157,6 @@ class DataFrame(object):
       params = []
       for fp in fparams:
         fptype = sig.parameters[fp].annotation.__name__
-        # fptype = DataFrame._mapTypes(fptype)
 
         p = Param(fp,fptype)
         params.append(p)
@@ -153,7 +165,6 @@ class DataFrame(object):
         (lines,_) = inspect.getsourcelines(func)
 
       returns = sig.return_annotation.__name__
-      # returns = DataFrame._mapTypes(returns)
 
       udf = UDF(funcName, params, lines, returns)
       call = FuncCall(funcName, self.columns, udf)
@@ -360,9 +371,12 @@ class DataFrame(object):
       else:
         newCol = ComputedCol(value, key)
 
+
       self.computedCols.append(newCol)
+      self.schema.append(newCol)
     else: # not am expr or DF -> must be a constant
       newCol = ComputedCol(Constant(value), key)
+      self.schema.append(newCol)
       self.computedCols.append(newCol)
 
   # magic function for read access by index: []
@@ -408,66 +422,6 @@ class DataFrame(object):
   ###################################
   # Comparison expressions
 
-  # @staticmethod
-  # def __expressionUpdateRefs(left, right):
-  #   if not isinstance(left, Projection):
-  #     raise ExpressionException(f"Must have a projection to access fields, but got {type(left)}")
-  #   if len(left.columns) != 1:
-  #     attrsStr = ",".join([str(x) for x in left.columns]) if left.columns else ""
-  #     raise ExpressionException(f"Projection list must have exactly one column, but is: {len(left.columns)}: [{attrsStr}]")
-
-  #   if isinstance(right, Projection):
-  #     r = right.columns[0]
-  #     if len(right.parents) > 0:
-  #       # we have a projection in an expression to reference a variable only
-  #       # thus, we want to update to the original DF in order to have the correct
-  #       # qualifier, instead of the one created for the projection
-  #       right.parents[0].updateRef(r)
-  #     else:
-  #       print("a projection without a parent should not happen... is your script correct?")
-  #   else:
-  #     r = right
-
-  #   # we know we are a projection. Update the projection-ref to our parent
-  #   left.parents[0].updateRef(left.columns[0])
-
-  #   return r
-
-  # def __eq__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = BoolExpr(self.columns[0], r)
-  #   return expr
-
-  # def __gt__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Gt(self.columns[0], r)
-  #   return expr
-
-  # def __lt__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Lt(self.columns[0], r)
-  #   return expr
-
-  # def __ge__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Ge(self.columns[0], r)
-  #   return expr
-  
-  # def __le__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Le(self.columns[0], r)
-  #   return expr
-
-  # def __ne__(self, other):
-  #   r = DataFrame.__expressionUpdateRefs(self, other)
-
-  #   expr = Ne(self.columns[0], r)
-  #   return expr
 
   ###########################################################################
   # Actions
@@ -499,6 +453,34 @@ class DataFrame(object):
 
   # Pandas DF stuff
 
+  def describe(self):
+    # min, max, (avg), count, count distinct
+
+    unioned = None
+    for col in self.schema.columns(lambda t : t[1] == ColType.NUMERIC):
+      ref = ColRef(col, self)
+      fMin = FuncCall(AggregateType.MIN, [ref],alias = "min")
+      fMax = FuncCall(AggregateType.MAX, [ref],alias = "max")
+      fAvg = FuncCall(AggregateType.MEAN, [ref],alias = "mean")
+      fCount = FuncCall(AggregateType.COUNT, [ref], alias ="count")
+
+      p = self.project([fMin, fMax, fAvg, fCount])
+      if unioned is None:
+        unioned = p
+      else:
+        unioned = unioned.union(p)
+
+    return unioned
+
+
+  def __len__(self) -> int:
+    f = FuncCall(AggregateType.COUNT, [AllColumns(self)],None, "rowcount")
+    cnter = self.project([f])
+
+    # res is a tuple! We are only interested in the first element
+    res = GrizzlyGenerator.fetchone(cnter)[0]
+    return res
+
   @property
   def shape(self):
     '''
@@ -506,9 +488,12 @@ class DataFrame(object):
 
     (number of columns, number of rows)
     '''
-    f = self.project(FuncCall("count", ["*"], None, "rowcount"))
-    cc = ComputedCol(f, None)
-    shapeDF = self.project(['*', cc])
+    f = self.project(FuncCall("count", [AllColumns(self)], None, "rowcount"))
+    cc = ComputedCol(f)
+
+    allCols = AllColumns(self)
+
+    shapeDF = self.project([allCols, cc])
     shapeDF = shapeDF.limit(1)
 
 
@@ -546,6 +531,9 @@ class DataFrame(object):
 
   ###################################
   # aggregation functions
+
+  # TODO: the aggregates on a Pandas DF return the corresponding aggregated value _per column_!
+  # i.e. on a DF { a, b, c} : df.count() returns count(a), count(b), count(c)
 
   def _exec_or_add_aggr(self, f: FuncCall):
     """
@@ -606,33 +594,104 @@ class DataFrame(object):
 
 
   def min(self, col=None,alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MIN, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.MIN, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      return self.__genTableAgg(col, AggregateType.MIN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
 
   def max(self, col=None, alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MAX, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.MAX, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      return self.__genTableAgg(col, AggregateType.MAX, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
 
   def mean(self, col=None,alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.MEAN, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.MEAN, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      # MEAN only over numeric columns
+      return self.__genTableAgg(col, AggregateType.MEAN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
 
   def count(self, col=None, alias=None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    if theCol is None:
-      theCol = [ColRef("*", self)]
+    if isinstance(self, Grouping):
+      theCol = DataFrame._getFuncCallCol(self, col)
+      if theCol is None:
+        theCol = [AllColumns(self)]
 
-    f = FuncCall(AggregateType.COUNT, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+      f = FuncCall(AggregateType.COUNT, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      return self.__genTableAgg(col, AggregateType.COUNT, lambda _: True)
 
-  def sum(self , col, alias = None):
-    theCol = DataFrame._getFuncCallCol(self, col)
-    f = FuncCall(AggregateType.SUM, theCol, None, alias)
-    return self._exec_or_add_aggr(f)
+  def sum(self , col=None, alias = None):
+    if isinstance(self, Grouping):
+      if col is None:
+        raise ValueError("must specify a column to aggregate!")
 
+      theCol = DataFrame._getFuncCallCol(self, col)
+      f = FuncCall(AggregateType.SUM, theCol, None, alias)
+      return self._exec_or_add_aggr(f)
+    else:
+      # SUM only over numeric columns
+      return self.__genTableAgg(col, AggregateType.SUM, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
+
+  def __genTableAgg(self, col, aggType, filterFunc):
+    if not self.schema and col is None:
+      raise SchemaError("must have a schema to compute aggregations over table")
+
+
+    if col is None:
+      col = self.schema.columns(filterFunc)
+    elif not isinstance(col, list):
+      # theCol = DataFrame._getFuncCallCol(self, col)[0]
+      # colType = self.schema._inferType(theCol)
+      # if not filterFunc(("",colType)):
+      #   raise SchemaError("column is not applicable!")
+      col = [col]
+
+    aggName = AggregateType.getName(aggType)
+
+    result = None
+    for colName in col:
+      theCols = DataFrame._getFuncCallCol(self, colName)
+      theCol = theCols[0]
+      self.schema.check(theCol)
+
+      colType = self.schema[theCol.colName()]
+      if not filterFunc(("",colType)):
+        raise SchemaError(f"cannot apply function {aggName} to column of type {colType} (column: {theCol.colName()})")
+
+      f = FuncCall(aggType, theCols, alias=aggName)
+      proj = [Constant(theCol.column, "colname"), f]
+      if result is None:
+        result = self.project(proj)
+      else:
+        prj = self.project(proj)
+        result = result.union(prj)
+
+    if len(col) == 1:
+      # fetch single value. Consists of two columns (col name and value) -> return only the value
+      t = result.first()
+      if t is not None:
+        result = t[1]
+
+    return result
+ 
 
   ###################################
   # show functions
@@ -683,7 +742,7 @@ class DataFrame(object):
   # def __repr__(self) -> str:
   #   tableStr = GrizzlyGenerator.table(self)
   #   return tableStr
-    
+
 ###########################################################################
 # Concrete DataFrames representing an operation
 
@@ -696,19 +755,21 @@ class Table(DataFrame):
     if index is not None and not (isinstance(index, str) or isinstance(index, list)):
       raise ValueError(f"index definition must be a string or list of strings, but is {type(index)}")
 
-    super().__init__([], None, alias, index)
+    super().__init__(schema, None, alias, index)
 
 class ExternalTable(DataFrame):
-  def __init__(self, file, colDefs, hasHeader, delimiter, format, fdw_extension_name):
+  def __init__(self, file, schema, hasHeader, delimiter, format, fdw_extension_name):
     self.filenames = file
-    self.colDefs = colDefs
+    self.colDefs = schema
     self.hasHeader = hasHeader
     self.delimiter = delimiter
     self.format = format
     self.fdw_extension_name = fdw_extension_name
     alias = GrizzlyGenerator._incrAndGetTupleVar()
     self.table = f"temp_ext_table{alias}"
-    super().__init__([], None, alias)
+
+    theSchema = Schema.fromList(schema)
+    super().__init__(theSchema, None, alias)
 
 class Projection(DataFrame):
 
@@ -724,18 +785,30 @@ class Projection(DataFrame):
     # update references to all columns
     theCols = []
     for col in columns:
-      theCol = self.updateRef(col)
+      if not isinstance(col, AllColumns):
+
+        parent.schema.check(col)
+
+        theCol = self.updateRef(col)
+      else:
+        theCol = col
       theCols.append(theCol)
       
-    columns = theCols
+    self.columns = theCols
 
-    super().__init__(columns, parent,GrizzlyGenerator._incrAndGetTupleVar())
+    newSchema = parent.schema.infer(self.columns)
+
+    super().__init__(newSchema, parent,GrizzlyGenerator._incrAndGetTupleVar())
+
+  
 
 class Filter(DataFrame):
 
   def __init__(self, expr: Expr, parent: DataFrame):
-    super().__init__(parent.columns, parent,GrizzlyGenerator._incrAndGetTupleVar())
+
+    parent.schema.check(expr)
     self.expr = self.updateRef(expr)
+    super().__init__(parent.schema, parent,GrizzlyGenerator._incrAndGetTupleVar())
 
 class Grouping(DataFrame):
 
@@ -758,19 +831,25 @@ class Grouping(DataFrame):
       else: 
         raise ExpressionException(f"invalid grouping column type: {type(theCol)}")
 
+      parent.schema.check(theCol)
+
       self.groupCols.append(theCol)
     
     self.aggFunc = []
-
-    super().__init__(self.groupCols, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    
+    newSchema = parent.schema.infer(self.groupCols)
+    super().__init__(newSchema, parent, GrizzlyGenerator._incrAndGetTupleVar())
 
   def _addAggFunc(self,funcCall: FuncCall):
     self.aggFunc.append(funcCall)
+    self.schema.append(funcCall)
     
 
   def filter(self, expr):
     # the expression might contain references to computed columns
     # update the refs so that these column references are not prefixed
+
+    self.schema.check(expr)
 
     aggColNames = [x.alias for x in self.aggFunc]
 
@@ -798,11 +877,17 @@ class Grouping(DataFrame):
 class Join(DataFrame):
   def __init__(self, parent, other, on, how, comp):
     t = GrizzlyGenerator._incrAndGetTupleVar()
-    super().__init__(parent.columns + other.columns, parent, t)
     self.right = other
     self.on = on
     self.how = how
     self.comp = comp
+
+    resultSchema = parent.schema.merge(other.schema)
+    if isinstance(on, Expr):
+      resultSchema.check(on)
+    # self.columns = parent.columns + other.columns
+
+    super().__init__(resultSchema, parent, t)
 
   def leftParent(self):
     return self.parents[0]
@@ -810,15 +895,30 @@ class Join(DataFrame):
   def rightParent(self):
     return self.right
 
+class Union(DataFrame):
+  def __init__(self, parent, other, distinct):
+    # TODO check schemas match!
+    
+    self.other = other
+    self.distinct = distinct
+
+    super().__init__(parent.schema, parent)
+
+  def leftParent(self):
+    return self.parents[0]
+
+  def rightParent(self):
+    return self.other
+
 class Limit(DataFrame):
   def __init__(self, limit: int, offset: int, parent):
-    super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
     self.limit = limit
     self.offset = offset
+    super().__init__(parent.schema, parent, GrizzlyGenerator._incrAndGetTupleVar())
 
 class Ordering(DataFrame):
   def __init__(self, by:list, ascending, parent):
-    super().__init__(parent.columns, parent, GrizzlyGenerator._incrAndGetTupleVar())
+    super().__init__(parent.schema, parent, GrizzlyGenerator._incrAndGetTupleVar())
     
     sortCols = []
     for col in by:
@@ -830,6 +930,8 @@ class Ordering(DataFrame):
         sortCols.append(self.updateRef(col))
       else:
         raise ExpressionException(f"unsupported type for oder by value: {type(col)}")
+
+    parent.schema.check(sortCols)
 
     self.by = sortCols
     self.ascending = ascending

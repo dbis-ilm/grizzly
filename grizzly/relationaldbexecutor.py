@@ -36,6 +36,24 @@ class RelationalExecutor(object):
   def close(self):
     self.connection.close()
 
+  def getSchemaForObject(self, objName: str):
+    (qry, namesColIdx, typesColIdx) = self.queryGenerator.getTableSchema(objName)
+    if qry is None:
+      return None
+
+    dtypes = {}
+    rs = self._execute(qry)
+    for row in rs:
+      colName = row[namesColIdx]
+      colType = row[typesColIdx]
+
+      dtypes[colName] = type(self.queryGenerator)._mapFromSQLTypes(str(colType))
+
+    rs.close()
+
+    return dtypes
+
+
   def fetchone(self, df):
     rs = self.execute(df)
     return rs.fetchone()
@@ -49,8 +67,18 @@ class RelationalExecutor(object):
       cols = RelationalExecutor.__getHeader(rs)
       tuples.append(cols)
 
+    def convert(i):
+      t = type(i)
+      if t is not int and t is not float and t is not str and t is not bool:
+        return str(i)
+      else:
+        return i
+
     for row in rs:
-      tuples.append(row)
+      # if the driver returns the tuple as some specialiced class (e.g. a Row implementation) 
+      # we hide this by converting it into a Python list
+      rowAsList = [convert(elem) for elem in row]
+      tuples.append(rowAsList)
 
     return tuples
 

@@ -1,56 +1,16 @@
+from grizzly.dataframes.schema import ColType, SchemaError
 from grizzly.expression import ExpressionException
 import unittest
 import sqlite3
-
 import re
+
+from matcher import CodeMatcher
+
 
 import grizzly
 from grizzly.aggregates import AggregateType
 from grizzly.sqlgenerator import SQLGenerator
 from grizzly.relationaldbexecutor import RelationalExecutor
-
-class CodeMatcher(unittest.TestCase):
-  
-
-  def matchSnipped(self, snipped, template, removeLinebreaks: bool = False):
-    res, mapping, reason = CodeMatcher.doMatchSnipped(snipped.strip(), template.strip(),removeLinebreaks)
-    if not res:
-      mapstr = "with mapping:\n"
-      for templ,tVar in mapping.items():
-        mapstr += f"\t{templ} -> {tVar}\n"
-      self.fail(f"Mismatch\nFound:    {snipped}\nExpected: {template}\nReason:\t{reason}\n{mapstr}")
-      
-
-  @staticmethod
-  def doMatchSnipped(snipped, template, removeLinebreaks):
-    pattern = re.compile(r"\$t[0-9]+")
-    pattern2 = re.compile("_t[0-9]+")
-
-    placeholders = pattern.findall(template)
-    occurences = pattern2.findall(snipped)
-
-    mapping = {}
-    for p,o in zip(placeholders, occurences):
-      if p not in mapping:
-        mapping[p] = o
-      elif p in mapping and mapping[p] != o:
-        return False, mapping, f"Mapping error: {p} -> {mapping[p]} exists, but {p} -> {o} found"
-
-    # if we get here, the occurences match the templates
-
-    if len(placeholders) != len(occurences):
-      return False, mapping, f"number of placeholders {len(placeholders)} does not match occurences {len(occurences)}"
-
-    for (k,v) in mapping.items():
-      template = template.replace(k,v)
-
-    templateClean = template.replace("\n","").replace(" ","").lower()
-    snippedClean = snipped.replace("\n","").replace(" ","").lower()
-    
-    matches = snippedClean == templateClean
-
-    return matches, mapping, "Snipped does not match template" if not matches else ""
-
 
 class DataFrameTest(CodeMatcher):
 
@@ -62,6 +22,22 @@ class DataFrameTest(CodeMatcher):
 
   def tearDown(self):
     grizzly.close()
+
+  def test_loadWithSchemaInferSQLite(self):
+    df = grizzly.read_table("events", inferSchema=True)
+    self.assertIsNotNone(df.schema.typeDict, "no schema dict set")
+
+    self.assertEqual(len(df.schema), 58)
+
+  def test_loadWithSchemaInferSQLiteTypeCheck(self):
+    df = grizzly.read_table("t3", inferSchema=True)
+    self.assertIsNotNone(df.schema.typeDict, "no schema dict set")
+
+    self.assertEqual(len(df.schema), 4)
+
+    expected = {"globaleventid":ColType.NUMERIC, "actor1name": ColType.TEXT, "actiongeo_long":ColType.NUMERIC,"actor1countrycode":ColType.TEXT}
+
+    self.assertDictEqual(expected, df.schema.typeDict)
 
   def test_groupby(self):
     df = grizzly.read_table("events")
@@ -106,8 +82,8 @@ class DataFrameTest(CodeMatcher):
   def test_groupByTableAggComputedCol(self):
     df = grizzly.read_table("events")
     g = df.groupby(["theyear","actor1name"])
-    g["cnt_actor"] = g.count("actor2name") # FIXME: should not trigger execution but add the function to projection
-    g["min_actor"] = g.min(g.actor2name) 
+    g["cnt_actor"] = g.count("actor2name") # should not trigger execution but add the function to projection
+    g["min_actor"] = g.min(g.actor2name) # same
 
     expected = "select $t1.theyear, $t1.actor1name, count($t1.actor2name) as cnt_actor, min($t1.actor2name) as min_actor from (select * from events $t0) $t1 group by $t1.theyear, $t1.actor1name"
     actual = g.generateQuery()
@@ -177,9 +153,173 @@ class DataFrameTest(CodeMatcher):
     self.matchSnipped(actual, expected)
 
   def test_selectCountStar(self):
-    df = grizzly.read_table("events")
-    actual = df.count()
-    self.assertEqual(actual, 30354)
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    actual = df.count().collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 4+1, "expected 5 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "count")
+
+
+  def test_selectCountCol(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.count('globaleventid')
+    self.assertEqual(cnt, len(df))
+
+  def test_selectCountColWithNulls(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.count('actor1name')
+    self.assertLess(cnt, len(df))
+
+  def test_selectCountTwoCol(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.count(['actor1name',df.actiongeo_long])
+
+    actual = cnt.collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "count")
+
+  def test_selectMaxStar(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    actual = df.max().collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 4+1, "expected 5 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "max")
+
+  def test_selectMaxColStr(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.max('actor1name')
+    self.assertLessEqual(cnt, "ZUNI")
+
+  def test_selectMaxColNum(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.max('actiongeo_long')
+    self.assertEqual(cnt, 178.767)
+
+  def test_selectMaxTwoCol(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.max(['actor1name',df.actiongeo_long])
+
+    actual = cnt.collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "max")
+
+  def test_selectMinStar(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    actual = df.min().collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 4+1, "expected 5 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "min")
+
+  def test_selectMinColStr(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.min('actor1name')
+    self.assertLessEqual(cnt, "A US")
+
+  def test_selectMinColNum(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.min('actiongeo_long')
+    self.assertLessEqual(cnt, -172.377)
+
+  def test_selectMinTwoCol(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.min(['actor1name',df.actiongeo_long])
+
+    actual = cnt.collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "min")
+
+  def test_selectSumStar(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    actual = df.sum().collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header (only numeric columns!)
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "sum")
+
+  def test_selectSumColStr(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    
+    with self.assertRaises(SchemaError):
+      cnt = df.sum('actor1name')
+      print(cnt)
+
+    # self.assertLessEqual(cnt, "A US")
+
+  def test_selectSumColNum(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.sum('actiongeo_long')
+    self.assertEqual(cnt, -58787.1467010002)
+
+  def test_selectSumTwoCol(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.sum(['globaleventid',df.actiongeo_long])
+
+    actual = cnt.collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "sum")
+
+  def test_selectMeanStar(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    actual = df.mean().collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header (only numeric columns!)
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "mean")
+
+  def test_selectMeanColStr(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    
+    with self.assertRaises(SchemaError):
+      cnt = df.mean('actor1name')
+      print(cnt)
+
+    # self.assertLessEqual(cnt, "A US")
+
+  def test_selectMeanColNum(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.mean('actiongeo_long')
+    self.assertAlmostEqual(cnt,-7.0810824742231,13)
+
+  def test_selectMeanTwoCol(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    cnt = df.mean(['globaleventid',df.actiongeo_long])
+
+    actual = cnt.collect(includeHeader=True)
+
+    self.assertEqual(len(actual), 2+1, "expected 3 rows") # no. column + header
+    self.assertEqual(len(actual[0]), 2, "expected 2 columns") # two columns
+
+    self.assertEqual(actual[0][0].lower(), "colname")
+    self.assertEqual(actual[0][1].lower(), "mean")
 
 
   def test_selectStarFilter(self):
@@ -211,11 +351,6 @@ class DataFrameTest(CodeMatcher):
 
     self.matchSnipped(actual, expected)
 
-  def test_selectCountCol(self):
-    df = grizzly.read_table("events")
-    cnt = df.count('actor2name')
-    self.assertGreater(cnt, 0)
-
   def test_selectStarGroupBy(self):
     df = grizzly.read_table("events") 
     df = df[df['globaleventid'] == '468189636']
@@ -243,7 +378,7 @@ class DataFrameTest(CodeMatcher):
     
     actual = df.generateQuery()
     
-    sql = "select computed, count(*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
+    sql = "select computed, count($t1.*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
 
     expected = f"""create or replace function mymod(s varchar(1024)) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
 
@@ -295,8 +430,6 @@ class DataFrameTest(CodeMatcher):
 
     a = g.count("actor1name", "cnt")
     
-       
-    # print(f"cnt: {a}")
     self.assertEqual(len(a.collect()),1)
 
   def test_groupByAggLimit(self):
@@ -495,6 +628,19 @@ class DataFrameTest(CodeMatcher):
     self.assertEqual(cols, 3) # 2 grouping + 1 aggr
     self.assertEqual(rows, 879)
 
+  def test_Len(self):
+    df = grizzly.read_table("events") 
+    l = len(df)
+
+    self.assertEqual(l, 30354)
+
+  def test_LenJoin(self):
+    df1 = grizzly.read_table("t1")
+    df2 = grizzly.read_table("t2")
+    
+    j  = df1.join(df2, on = (df1.actor1name == df2.actor2name) | (df1["actor1countrycode"] <= df2["actor2countrycode"]), how="left outer")
+    cnt = len(j)
+    self.assertEqual(cnt, 9899259)
 
   def test_collect(self):
     df = grizzly.read_table("events") 
@@ -576,14 +722,6 @@ class DataFrameTest(CodeMatcher):
   #   rowsLen = rows+ 1 # column names
 
   #   self.assertEqual(dfLen, rowsLen) 
-
-  def test_ViewJoin(self):
-    df1 = grizzly.read_table("t1")
-    df2 = grizzly.read_table("t2")
-    
-    j  = df1.join(df2, on = (df1.actor1name == df2.actor2name) | (df1["actor1countrycode"] <= df2["actor2countrycode"]), how="left outer")
-    cnt = j.count()
-    self.assertEqual(cnt, 9899259)
 
   def test_udf(self):
     from grizzly.generator import GrizzlyGenerator
@@ -752,7 +890,7 @@ class DataFrameTest(CodeMatcher):
     for _ in df:
       cnt += 1
 
-    expected = df.count()
+    expected = len(df)
 
     self.assertEqual(cnt, expected)
 
@@ -914,7 +1052,7 @@ class DataFrameTest(CodeMatcher):
     GrizzlyGenerator._backend.queryGenerator = newGen
 
     try:
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False, format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], False, fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -922,7 +1060,7 @@ class DataFrameTest(CodeMatcher):
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -930,7 +1068,7 @@ class DataFrameTest(CodeMatcher):
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -938,7 +1076,7 @@ class DataFrameTest(CodeMatcher):
                 "SELECT * FROM temp_ext_table$t0 $t0"
       self.matchSnipped(actual, expected)
 
-      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', format="csv")
+      df = grizzly.read_external_files("filename.csv", ["a:int, b:str, c:float"], True, ',', fileFormat="csv")
       actual = df.generateQuery()
       expected = "DROP TABLE IF EXISTS temp_ext_table$t0; " \
                 "CREATE EXTERNAL TABLE temp_ext_table$t0(a int, b VARCHAR(1024), c float) " \
@@ -996,6 +1134,70 @@ return apply(input)
     finally:
       GrizzlyGenerator._backend.queryGenerator = oldGen
 
+
+  def test_LoadWithSchema(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    self.assertEqual(len(df.schema), 4)
+    self.assertEqual(df.schema["globaleventid"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actiongeo_long"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actor1name"], ColType.TEXT)
+    self.assertEqual(df.schema["actor1countrycode"], ColType.TEXT)
+
+  def test_ProjectionSchema(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
+    self.assertEqual(len(df.schema), 3)
+    self.assertEqual(df.schema["globaleventid"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actiongeo_long"], ColType.NUMERIC)
+    self.assertEqual(df.schema["actor1name"], ColType.TEXT)
+
+  def test_describeTable(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    # df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
+    actual = df.describe().generateQuery()
+    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT * from t3 $t0) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT * from t3 $t0) $t2"
+
+    self.matchSnipped(actual, expected)
+
+  def test_describeQuery(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
+    actual = df.describe().generateQuery()
+    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from t3 $t0) $t3) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from t3 $t0) $t3) $t2"
+
+    self.matchSnipped(actual, expected)
+
+  def test_describeFunc(self):
+
+    from grizzly.generator import GrizzlyGenerator
+    oldGen = GrizzlyGenerator._backend.queryGenerator
+
+    newGen = SQLGenerator("postgresql")
+    GrizzlyGenerator._backend.queryGenerator = newGen
+
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[df.globaleventid]
+
+    def myfunc(i: str) -> int:
+      l = len(i)
+      l = l + l
+      return l
+
+    df["newcol"] = df["actor1name"].map(myfunc)
+    actual = df.describe().generateQuery()
+    expected = """CREATE OR REPLACE FUNCTION myfunc(i varchar(1024)) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
+    l = l + l
+    return l
+    ' parallel safe;
+    SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from t3 $t0) $t4) $t1 
+    UNION ALL 
+    SELECT min($t3.newcol) as min, max($t3.newcol) as max, avg($t3.newcol) as mean, count($t3.newcol) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from t3 $t0) $t4) $t3"""
+    ""
+
+
+    GrizzlyGenerator._backend.queryGenerator = oldGen
+
+    self.matchSnipped(actual, expected, removeLinebreaks=True)
 
 if __name__ == "__main__":
     unittest.main()

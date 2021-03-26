@@ -51,8 +51,6 @@ class Expr(object):
     if isinstance(other, Expr) or isinstance(other, grizzly.dataframes.frame.DataFrame):
       return other
 
-    
-    
     return Constant(other)
 
   # boolean operations
@@ -144,9 +142,13 @@ class BinaryExpression(Expr):
     self.operand = operand
     super().__init__()  
 
+  def __hash__(self) -> int:
+      return hash((self.left, self.right, self.operand))
+
 class Constant(Expr):
-  def __init__(self, value):
+  def __init__(self, value, alias: str = None):
     self.value = value
+    self.alias = alias
     super().__init__()
 
 class ArithmExpr(BinaryExpression):
@@ -161,7 +163,7 @@ class LogicExpr(BinaryExpression):
   def __init__(self, left: Expr, right: Expr, operand: LogicOperation):
     super().__init__(left, right, operand)
 
-class SetExpr(BinaryExpression):
+class SetExpr(BoolExpr):
   def __init__(self, left: Expr, right: Expr, operand: SetOperation):
       super().__init__(left, right, operand)
 
@@ -226,6 +228,10 @@ class ColRef(Expr):
 
     super().__init__()
 
+  def __str__(self):
+
+    return f"DF: {self.df} Col:{self.column} AS: {self.alias}"
+
   def colName(self):
     return self.column
 
@@ -267,6 +273,11 @@ class ColRef(Expr):
       p = self.df.project(self.column)
       return p[expr] # use __getitem__ of DataFrame
 
+class AllColumns(ColRef):
+  def __init__(self, df):
+    super().__init__('*', df)
+
+
 class ExprTraverser:
   @staticmethod
   def bf(e: Expr, visitorFunc):
@@ -276,9 +287,9 @@ class ExprTraverser:
     while todo.qsize() > 0:
       current = todo.get_nowait()
 
-      if current.left:
+      if isinstance(current, BinaryExpression) and current.left:
         todo.put_nowait(current.left)
-      if current.right:
+      if isinstance(current, BinaryExpression) and current.right:
         todo.put_nowait(current.right)
       
       visitorFunc(current)
