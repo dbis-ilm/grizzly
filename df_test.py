@@ -1183,20 +1183,9 @@ return apply(input)
       l = l + l
       return l
 
-    # self.fail("UDF is created twice.")
-    # FIXME: we need to check if the code to create in pre query already exists
-    # maybe some kind of dict. Or we could use CTEs for the query and use the CTE in describe
-    # WITH (SELECT a,b FROM ..) AS cte_t0
-    # SELECT min(a), max(a), ... FROM cte_t0
-    # UNION ALL
-    # SELECT min(b), max(b), ... FROM cte_t0
-
     df["newcol"] = df["actor1name"].map(myfunc)
     actual = df.describe().generateQuery()
     expected = """CREATE OR REPLACE FUNCTION myfunc(i varchar(1024)) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
-    l = l + l
-    return l
-    ' parallel safe;;CREATE OR REPLACE FUNCTION myfunc(i varchar(1024)) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
     l = l + l
     return l
     ' parallel safe;

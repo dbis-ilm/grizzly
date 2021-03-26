@@ -5,7 +5,7 @@ from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, Exte
 from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 
-from typing import List, Tuple
+from typing import List, Set, Tuple
 
 import logging
 logger = logging.getLogger(__name__)
@@ -540,7 +540,7 @@ class SQLGenerator:
     return queries
 
   
-  def _generateAggCode(self, df, f) -> Tuple[List[str],str]:
+  def _generateAggCode(self, df, f) -> Tuple[Set[str],str]:
     # aggregation over a table is performed in a way that the actual query
     # that was built is executed as an inner query and around that, we 
     # compute the aggregation
@@ -554,10 +554,14 @@ class SQLGenerator:
       (fPre,funcCode) = self._generateFuncCall(f)
       aggSQL = f"SELECT {funcCode} FROM {df.table} {df.alias}"
 
-    return (pre+fPre, aggSQL)
+    preQuery = SQLGenerator._makeUnique(pre + fPre)
 
-  def generate(self, df) -> Tuple[List[str],str]:
+    return (preQuery, aggSQL)
+
+  def generate(self, df) -> Tuple[Set[str],str]:
     (preQueryCode, qryString) = self._buildFrom(df)
+
+    preQueryCode = SQLGenerator._makeUnique(preQueryCode)
 
     return (preQueryCode, qryString)
 
@@ -581,3 +585,21 @@ class SQLGenerator:
       columnTypes = 1
 
     return (qry, columnNames, columnTypes)
+
+
+  @staticmethod
+  def _makeUnique(preQueries: List[str]) -> List[str]:
+
+    result = []
+    hashes = set()
+
+    if isinstance(preQueries, str):
+      return [preQueries]
+
+    for pq in preQueries:
+      h = hash(pq)
+      if h not in hashes:
+        result.append(pq)
+        hashes.add(h)
+
+    return result
