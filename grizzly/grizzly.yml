@@ -57,6 +57,7 @@ postgresql:
         return($$tensor_to_output_func_name$$(ret))
       return apply_model($$input_names$$)
     return apply($$input_names$$)
+  schema_query: select column_name,data_type from information_schema.columns where table_name = '$$tablename$$';
 
 sqlite:
   limit: limit
@@ -91,7 +92,9 @@ monetdb:
       random.onnx_session = onnxruntime.InferenceSession("$$onnx_file_path$$")
         
     return [apply_model(e) for e in $$input_names$$]
-    
+  schema_query: select c.name, c.type from sys.tables t inner join sys.columns c on t.id = c.table_id where t.name = '$$tablename$$'
+  colname_column: 0
+  coltype_column: 1  
     
 
 vector:
@@ -173,3 +176,6 @@ vector:
         return($$tensor_to_output_func_name$$(ret))
       return apply_model($$input_names$$)
     return apply($$input_names$$)
+  schema_query: select column_name, column_datatype from iicolumns where table_name = '$$tablename$$';
+  colname_column: 0
+  coltype_column: 1
