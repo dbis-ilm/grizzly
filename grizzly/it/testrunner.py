@@ -1,5 +1,7 @@
 import logging
 from pathlib import Path
+
+from grizzly.dataframes.frame import DataFrame
 import grizzly
 from grizzly.sqlgenerator import SQLGenerator
 from grizzly.relationaldbexecutor import RelationalExecutor
@@ -14,6 +16,22 @@ def initTables(con):
   with open("grizzly/it/resources/tables.sql", "rt") as f:
     for line in f:
       lines.append(line)
+
+  with open("grizzly/it/resources/tpch-scripts/create_tables.sql", "rt") as f:
+    for line in f:
+      lines.append(line)
+
+  with open("grizzly/it/resources/tpch-scripts/create_pk.sql", "rt") as f:
+    for line in f:
+      lines.append(line)
+
+  with open("grizzly/it/resources/tpch-scripts/create_fk.sql", "rt") as f:
+    for line in f:
+      lines.append(line)
+
+  # with open("grizzly/it/resources/tpch-scripts/create_indexes.sql", "rt") as f:
+  #   for line in f:
+  #     lines.append(line)    
 
   lines = "\n".join(lines)
   stmts = lines.split(";")
@@ -73,7 +91,9 @@ def run(dbName: str, con, alchemyCon):
 
     grizzlyResult = execute(scriptsDir,gScript,con, alchemyCon)
 
-    if not compare(grizzlyResult, pandasResult):
+    logger.debug("got both. now compare")
+
+    if compare(grizzlyResult, pandasResult) == False:
       logger.error(f"{gScript} vs. {pScript} : {grizzlyResult} vs {pandasResult}")
 
       name = gScript[len("grizzly_"):].lower()
@@ -100,4 +120,11 @@ def execute(scriptDir, file,con, alchemyCon):
   return retVal
 
 def compare(grizzlyResult, pandasResult) -> bool:
-  return grizzlyResult == pandasResult
+  if isinstance(grizzlyResult, DataFrame):
+    logger.debug("found two DFs")
+    res = True
+  else:
+    logger.debug("result is not a DF")
+    res = grizzlyResult == pandasResult
+  logger.debug(f"comparing results in: {res}")
+  return res
