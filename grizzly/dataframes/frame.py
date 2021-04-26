@@ -99,7 +99,7 @@ class DataFrame(object):
       else:
         lOn = ColRef(on[0], self)
       if not other.hasColumn(on[1]):
-        raise ExpressionException(f"No such column {on[1]} for join in right hand side")
+        raise ExpressionException(f"No such column {on[1]} for join in right hand side. Has cols: {other.schema}")
       else:
         rOn = ColRef(on[1], other)
 
