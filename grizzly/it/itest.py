@@ -66,6 +66,9 @@ if __name__ == "__main__":
 
   summary = {}
 
+  from grizzly.it.testrunner import TestRunner
+  runner = TestRunner()
+
   for i in range (2,len(sys.argv)):
     dbName = sys.argv[i]
     settings = loadTestConfig(dbName)
@@ -86,10 +89,6 @@ if __name__ == "__main__":
 
       logger.info("start running tests")
 
-      # I don't know, but I cannot write "import testrunner" 
-      # but this works...
-      # runner = importlib.import_module("grizzly.it.testrunner")
-      import grizzly.it.testrunner as runner
       failedTests = runner.run(dbName, dbCon, alchemyCon)
       logger.info("finished running tests")
 
