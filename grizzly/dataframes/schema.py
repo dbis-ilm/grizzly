@@ -221,7 +221,7 @@ class Schema(object):
 
     return Schema(newSchemaDict)
         
-  def append(self,value):  
+  def append(self,value): 
     '''
     Add a new column to this schema
     This modifies the schema in place and also returns the resulting schema
@@ -230,7 +230,8 @@ class Schema(object):
     name = Schema._getName(value)
     
     if self.typeDict is None:
-      self.typeDict = {name:resultType}
+      # self.typeDict = {name:resultType}
+      return self
     else:
       self.typeDict[name] = resultType
 
