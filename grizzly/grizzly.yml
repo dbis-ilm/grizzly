@@ -58,6 +58,8 @@ postgresql:
       return apply_model($$input_names$$)
     return apply($$input_names$$)
   schema_query: select column_name,data_type from information_schema.columns where table_name = '$$tablename$$';
+  colname_column: 0
+  coltype_column: 1
 
 sqlite:
   limit: limit
