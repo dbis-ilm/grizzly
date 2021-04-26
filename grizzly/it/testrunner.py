@@ -87,24 +87,27 @@ class TestRunner(unittest.TestCase):
     scripts = [ (g,p) for g in grizzlyScripts for p in pandasScripts if g[len("grizzly_"):].lower() == p[len("pandas_"):].lower()]
 
     for (gScript, pScript) in scripts:
-      if not pScript in self.pandasResults:
-        logger.debug(f"did NOT find Pandas result in cache, compute it")
-        pandasResult = TestRunner.execute(scriptsDir, pScript, con, alchemyCon)
-        self.pandasResults[pScript] = pandasResult
-      else:
-        pandasResult = self.pandasResults[pScript]
-        logger.debug(f"found Pandas result in cache: {pandasResult}")
+      try:
+        if not pScript in self.pandasResults:
+          logger.debug(f"did NOT find Pandas result in cache, compute it")
+          pandasResult = TestRunner.execute(scriptsDir, pScript, con, alchemyCon)
+          self.pandasResults[pScript] = pandasResult
+        else:
+          pandasResult = self.pandasResults[pScript]
+          logger.debug(f"found Pandas result in cache: {pandasResult}")
 
-      grizzlyResult = TestRunner.execute(scriptsDir,gScript,con, alchemyCon)
-      if isinstance(grizzlyResult, GrizzlyDataFrame):
-        grizzlyResult = grizzlyResult.collect()
+        grizzlyResult = TestRunner.execute(scriptsDir,gScript,con, alchemyCon)
+        if isinstance(grizzlyResult, GrizzlyDataFrame):
+          grizzlyResult = grizzlyResult.collect()
 
-      if not self.compare(grizzlyResult, pandasResult):
-        logger.error(f"{gScript} vs. {pScript} : {grizzlyResult} vs {pandasResult}")
+        if not self.compare(grizzlyResult, pandasResult):
+          logger.error(f"{gScript} vs. {pScript} : {grizzlyResult} vs {pandasResult}")
 
-        name = gScript[len("grizzly_"):].lower()
+          name = gScript[len("grizzly_"):].lower()
 
-        failedTests.append((name, grizzlyResult, pandasResult))
+          failedTests.append((name, grizzlyResult, pandasResult))
+      except Exception as e:
+        failedTests.append(str(e))
 
 
     resultStr = "Passed" if len(failedTests) == 0 else "Failed"
