@@ -20,7 +20,13 @@ def startDockerContainer(dbName:str, settings, dockerClient):
 
   img = settings["image"]
   port = settings["port"]
-  portsDict = {f"{port}/tcp": ('127.0.0.1',port)}
+  if isinstance(port,list):
+    portsDict = {}
+    for p in port:
+      portsDict[f"{p}/tcp"] = ('127.0.0.1',p)
+  else:
+    portsDict = {f"{port}/tcp": ('127.0.0.1',port)}
+
   env = settings.get("environment",{})
 
   logger.info(f"starting Docker container for {img}: Port: {portsDict}, env: {env}")
@@ -37,6 +43,9 @@ def connectDB(dbName: str,settings: Dict):
   dbUser = settings["user"]
   dbPass = settings["password"]
   dbPort = settings["port"]
+  if isinstance(dbPort, list):
+    dbPort = dbPort[0]
+    
   dbDB = settings["db"]
 
   logger.info(f"connect to DB with {dbUser}:{dbPass} @ {dbDB} on port {dbPort}")
@@ -82,6 +91,17 @@ if __name__ == "__main__":
       client = docker.from_env()
       container = startDockerContainer(dbName,settings, client)
       logger.debug(f"created container: {container}")
+
+      if "cmds" in settings:
+        commands = settings["cmds"]
+        logger.info(f"run before scripts: {commands}")
+
+        # loop over setup commands 
+        for theCmd in commands:
+          logger.debug(f"Executing inside container: '{theCmd}'")
+          (ret, stream) = container.exec_run(theCmd, user="root")
+          logger.debug(f"return code is {ret}")
+          logger.debug(f"\tOutput: {stream}")
 
     try:
       (dbCon,alchemyCon) = connectDB(dbName, settings)

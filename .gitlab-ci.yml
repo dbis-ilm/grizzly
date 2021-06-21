@@ -34,7 +34,8 @@ test:monetdb:
   before_script:
     - python -V  # Print out python version for debugging
     - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
-    - monetdbd start -n /var/monetdb5/dbfarm &
+    - dnf install -y https://www.monetdb.org/downloads/Fedora/33/x86_64/MonetDB-python3-11.39.17-20210503.fc33.x86_64.rpm #install python extensin
+    - monetdb set embedpy3=yes demo #enable python
   script:
     python -m grizzly.it.itest nodocker monetdb
 
@@ -50,3 +51,14 @@ test:postgresql:
     - /docker-entrypoint.sh postgres &
   script:
     python3 -m grizzly.it.itest nodocker postgresql
+
+test:vector:
+  image: actian/vector
+  tags:
+    - grouprunner
+  before_script:
+    - yum update
+    - python3 -V  # Print out python version for debugging
+    - pip3 install wheel pyyaml pandas sqlalchemy
+  script:
+    python3 -m grizzly.it.itest nodocker vector
