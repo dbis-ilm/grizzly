@@ -1,6 +1,7 @@
-from grizzly.it.itest import TestFailedException
 import logging
 from pathlib import Path
+
+from numpy import string_
 import grizzly
 from grizzly.dataframes.frame import DataFrame as GrizzlyDataFrame
 from grizzly.sqlgenerator import SQLGenerator
@@ -24,40 +25,34 @@ class TestRunner(unittest.TestCase):
   @staticmethod
   def initTables(con):
     logger.debug("init DB")
-    lines = []
-    with open("grizzly/it/resources/tables.sql", "rt") as f:
-      for line in f:
-        lines.append(line)
-
-    with open("grizzly/it/resources/tpch-scripts/create_tables.sql", "rt") as f:
-      for line in f:
-        lines.append(line)
-
-    with open("grizzly/it/resources/tpch-scripts/create_pk.sql", "rt") as f:
-      for line in f:
-        lines.append(line)
-
-    with open("grizzly/it/resources/tpch-scripts/create_fk.sql", "rt") as f:
-      for line in f:
-        lines.append(line)
-
-    # with open("grizzly/it/resources/tpch-scripts/create_indexes.sql", "rt") as f:
-    #   for line in f:
-    #     lines.append(line)    
-
-    lines = "\n".join(lines)
-    stmts = lines.split(";")
-    stmts = list(filter(lambda x: len(x) > 1, stmts))
-    logger.debug(f"setup script has {len(stmts)} entries")
-    cnt = 0
-    marker = len(stmts) // 10
-
-    cursor = con.cursor()
-    for stmt in stmts:
-      # logger.debug(f"execute setup statement: {stmt}")
+    files = ["grizzly/it/resources/tables.sql",\
+             "grizzly/it/resources/tpch-scripts/create_tables.sql",\
+             "grizzly/it/resources/tpch-scripts/create_pk.sql",\
+             "grizzly/it/resources/tpch-scripts/create_fk.sql"]
     
-      cursor.execute(stmt)
-      cnt += 1
+    
+    cnt = 0
+    for file in files:
+      logger.debug(f"processing {file}")
+
+      lines = []
+      with open(file, "rt") as f:
+        for line in f:
+          if len(line.strip()) > 1 and (not line.startswith("--")):
+            lines.append(line)
+
+      
+
+      lines = "\n".join(lines)
+      stmts = lines.split(";")
+      stmts = list(filter(lambda x: len(x.strip()) > 1, stmts))
+      logger.debug(f"setup script has {len(stmts)} entries")
+      
+
+      cursor = con.cursor()
+      for stmt in stmts:
+        cursor.execute(stmt)
+        cnt += 1
 
     con.commit()
     logger.info(f"finished DB setup: {cnt}")
@@ -143,7 +138,7 @@ class TestRunner(unittest.TestCase):
       try:
         self.assertAlmostEqual(grizzlyResult, pandasResult,5)
         return True
-      except TestFailedException as e:
+      except Exception as e:
         logger.debug(f"failed to match float results: {e}")
         return False
     elif isinstance(pandasResult, pd.DataFrame) or isinstance(pandasResult, pd.Series):
@@ -152,7 +147,7 @@ class TestRunner(unittest.TestCase):
         
         self.assertListEqual(pList, grizzlyResult)
         return True
-      except TestFailedException as e:
+      except Exception as e:
         logger.debug(f"failed to match DF results results: {e}")
         return False
     else:

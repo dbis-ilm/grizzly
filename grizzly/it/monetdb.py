@@ -1,4 +1,3 @@
-import typing
 import pymonetdb
 import logging
 

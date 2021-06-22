@@ -11,9 +11,9 @@ with open('grizzly/it/logger.yml','rt') as f:
 logging.config.dictConfig(config)
 logger=logging.getLogger("test")
 
-class TestFailedException(Exception):
-  def __init__(self, *args: object) -> None:
-      super().__init__(*args)
+# class TestFailedException(Exception):
+#   def __init__(self, *args: object) -> None:
+#       super().__init__(*args)
 
 def startDockerContainer(dbName:str, settings, dockerClient):
 
@@ -158,4 +158,6 @@ if __name__ == "__main__":
       fails.append(db)
 
   if len(fails) > 0:
-    raise TestFailedException(f"Tests failed for {fails}")
+    logger.fatal(f"Tests failed for {fails}")
+    sys.exit(1)
+    # raise TestFailedException(f"Tests failed for {fails}")
