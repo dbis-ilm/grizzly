@@ -1,4 +1,3 @@
-import importlib
 import sys
 from typing import Dict
 
@@ -31,9 +30,49 @@ def startDockerContainer(dbName:str, settings, dockerClient):
 
   logger.info(f"starting Docker container for {img}: Port: {portsDict}, env: {env}")
 
-  container = dockerClient.containers.run(img, auto_remove = True, detach = True, ports = portsDict, name=f"grizzly_ittest_{dbName}",environment=env)
+  containerName = f"grizzly_ittest_{dbName}"
+
+  isNewContainer = True
+
+  existingContainers = dockerClient.containers.list(filters={"name":containerName, "status":"exited"})
+  if len(existingContainers) >= 1:
+
+    logger.debug(f"found existing containers: {existingContainers}")
+
+    container = existingContainers[0]
+    isNewContainer = False
+
+    if len(existingContainers) > 1:
+      logger.warning(f"there seem to be multiple containers with name {containerName}, we'll use the first one")
+
+    logger.debug(f"found existing container: {container}")
+    if container.status != "running":
+      logger.debug(f"existing container is not running, trying to start it")
+      container.start()
+
+  else:
+    logger.debug("no existing container found, creating a new one")
+    container = dockerClient.containers.run(img, auto_remove = False, detach = True, ports = portsDict, name=containerName,environment=env)
+
+    try:
+      if "container_setup" in settings:
+        commands = settings["container_setup"]
+        logger.info(f"run container setup commands: {commands}")
+
+        # loop over setup commands 
+        for cmd in commands:
+          logger.debug(f"Executing inside container: '{cmd}'")
+          (ret, stream) = container.exec_run(cmd, user="root")
+          if ret != 0:
+            logger.debug(f"Command failed? Return code is {ret}")
+            logger.debug(f"\tOutput: {stream}")
+    except Exception as e:
+      logger.error(f"failed to run container setup: {str(e)}")
+      if container is not None:
+        dockerClient.containers.stop(container)
+        dockerClient.containers.remove(container)
   
-  return container
+  return (container, isNewContainer)
   
 def connectDB(dbName: str,settings: Dict):
 
@@ -84,25 +123,14 @@ if __name__ == "__main__":
     logger.debug(f"db config has {len(settings)} entries")
     
     container = None
+    needsSetup = startContainer
     if startContainer:
 
       import docker
 
       client = docker.from_env()
-      container = startDockerContainer(dbName,settings, client)
+      (container,needsSetup) = startDockerContainer(dbName,settings, client)
       logger.debug(f"created container: {container}")
-
-      if "container_setup" in settings:
-        commands = settings["container_setup"]
-        logger.info(f"run container setup commands: {commands}")
-
-        # loop over setup commands 
-        for cmd in commands:
-          logger.debug(f"Executing inside container: '{cmd}'")
-          (ret, stream) = container.exec_run(cmd, user="root")
-          if ret != 0:
-            logger.debug(f"Command failed? Return code is {ret}")
-            logger.debug(f"\tOutput: {stream}")
 
     try:
       (dbCon,alchemyCon) = connectDB(dbName, settings)
@@ -110,7 +138,7 @@ if __name__ == "__main__":
 
       logger.info("start running tests")
 
-      failedTests = runner.run(dbName, dbCon, alchemyCon)
+      failedTests = runner.run(dbName, dbCon, alchemyCon, needsSetup = needsSetup)
       logger.info("finished running tests")
 
       summary[dbName] = failedTests
