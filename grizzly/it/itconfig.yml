@@ -13,7 +13,7 @@ monetdb:
   password: monetdb
   port: 50000
   db: demo
-  cmds: 
+  container_setup: 
     - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
     - dnf install -y https://www.monetdb.org/downloads/Fedora/33/x86_64/MonetDB-python3-11.39.17-20210503.fc33.x86_64.rpm
     - monetdb set embedpy3=yes demo

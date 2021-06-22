@@ -92,16 +92,17 @@ if __name__ == "__main__":
       container = startDockerContainer(dbName,settings, client)
       logger.debug(f"created container: {container}")
 
-      if "cmds" in settings:
-        commands = settings["cmds"]
-        logger.info(f"run before scripts: {commands}")
+      if "container_setup" in settings:
+        commands = settings["container_setup"]
+        logger.info(f"run container setup commands: {commands}")
 
         # loop over setup commands 
-        for theCmd in commands:
-          logger.debug(f"Executing inside container: '{theCmd}'")
-          (ret, stream) = container.exec_run(theCmd, user="root")
-          logger.debug(f"return code is {ret}")
-          logger.debug(f"\tOutput: {stream}")
+        for cmd in commands:
+          logger.debug(f"Executing inside container: '{cmd}'")
+          (ret, stream) = container.exec_run(cmd, user="root")
+          if ret != 0:
+            logger.debug(f"Command failed? Return code is {ret}")
+            logger.debug(f"\tOutput: {stream}")
 
     try:
       (dbCon,alchemyCon) = connectDB(dbName, settings)
