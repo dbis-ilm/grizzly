@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import Dict
 
@@ -10,10 +11,6 @@ with open('grizzly/it/logger.yml','rt') as f:
   config=yaml.safe_load(f.read())
 logging.config.dictConfig(config)
 logger=logging.getLogger("test")
-
-# class TestFailedException(Exception):
-#   def __init__(self, *args: object) -> None:
-#       super().__init__(*args)
 
 def startDockerContainer(dbName:str, settings, dockerClient):
 
@@ -52,7 +49,8 @@ def startDockerContainer(dbName:str, settings, dockerClient):
 
   else:
     logger.debug("no existing container found, creating a new one")
-    container = dockerClient.containers.run(img, auto_remove = False, detach = True, ports = portsDict, name=containerName,environment=env)
+    container = dockerClient.containers.run(img, auto_remove = False, detach = True, ports = portsDict, \
+      name=containerName,environment=env, volumes= {f'{os.getcwd()}/grizzly/it/resources':{'bind':"/resources", "mode":"ro"}})
 
     try:
       if "container_setup" in settings:
@@ -66,6 +64,10 @@ def startDockerContainer(dbName:str, settings, dockerClient):
           if ret != 0:
             logger.debug(f"Command failed? Return code is {ret}")
             logger.debug(f"\tOutput: {stream}")
+
+      #set up directories for test resources
+      
+
     except Exception as e:
       logger.error(f"failed to run container setup: {str(e)}")
       if container is not None:
@@ -160,4 +162,3 @@ if __name__ == "__main__":
   if len(fails) > 0:
     logger.fatal(f"Tests failed for {fails}")
     sys.exit(1)
-    # raise TestFailedException(f"Tests failed for {fails}")

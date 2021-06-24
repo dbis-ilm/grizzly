@@ -6,6 +6,11 @@ postgresql:
   password: example
   port: 5432
   db: postgres
+  container_setup:
+    - apt-get update
+    - apt-get install  -y postgresql-plpython3-13
+    - psql -U postgres -c "create language plpython3u"
+    - psql -U postgres -c "CREATE EXTENSION file_fdw"
 
 monetdb:
   image: monetdb/monetdb
