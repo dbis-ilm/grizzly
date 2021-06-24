@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 class Config:
 
   @staticmethod
-  def loadProfile(profile: str):
+  def loadProfile(profile):
     logger.debug("loading configs for profile %s",profile)
     if not profile:
       return Config(profile, dict())

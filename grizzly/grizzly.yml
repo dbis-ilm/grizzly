@@ -76,6 +76,18 @@ monetdb:
     LANGUAGE python { 
     $$code$$ 
     }; 
+  externaltable:
+    - DROP LOADER IF EXISTS csv_loader;
+    - CREATE TEMPORARY TABLE $$name$$($$schema$$) # FROM LOADER csv_loader('$$filenames$$');
+    - COPY OFFSET $$monetdboffset$$ INTO $$name$$  FROM '$$filenames$$'
+    # - | 
+    #   CREATE LOADER csv_loader(filename STRING) LANGUAGE PYTHON {
+    #     import csv
+    #     with open(filename, newline='') as csvfile:
+    #       spamreader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+    #       for row in spamreader:
+    #         _emit.emit(row)
+    #   };
   ONNX_code: |
     import onnxruntime
     import random

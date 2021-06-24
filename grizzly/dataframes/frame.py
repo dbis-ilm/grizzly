@@ -911,7 +911,7 @@ class Union(DataFrame):
     return self.other
 
 class Limit(DataFrame):
-  def __init__(self, limit: int, offset: int, parent):
+  def __init__(self, limit, offset, parent):
     self.limit = limit
     self.offset = offset
     super().__init__(parent.schema, parent, GrizzlyGenerator._incrAndGetTupleVar())

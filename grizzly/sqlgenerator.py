@@ -230,7 +230,7 @@ class SQLGenerator:
 
     return (pre,exprSQL)
 
-  def _buildFrom(self,df) -> Tuple[List[str], str, str]:
+  def _buildFrom(self,df): #-> Tuple[List[str], str, str]:
 
     if df is not None:
 
@@ -441,7 +441,7 @@ class SQLGenerator:
         raise ValueError(f"unsupported operator {type(df)}")
 
     else:
-      return ""
+      return ("","")
 
 
   @staticmethod
@@ -524,6 +524,8 @@ class SQLGenerator:
 
     postgresoptions = f"filename '{tab.filenames}', format '{tab.format}', delimiter '{tab.delimiter}'"
 
+    monetdboffset = 1 if tab.hasHeader == False else 2
+
     template = templates["externaltable"]
     assert isinstance(template, list), "External table template must be a list"
     
@@ -534,6 +536,7 @@ class SQLGenerator:
         .replace("$$format$$", tab.format)\
         .replace("$$vectoroptions$$", vectoroptionString)\
         .replace("$$postgresoptions$$", postgresoptions)\
+        .replace("$$monetdboffset$$", str(monetdboffset))\
         .replace("$$fdw_extension_name$$", tab.fdw_extension_name)
       queries.append(code)
     
