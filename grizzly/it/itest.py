@@ -95,6 +95,55 @@ def connectDB(dbName: str,settings: Dict):
   
   return connection
 
+def setupDB(con):
+  logger.debug("init DB")
+  files = [\
+            "grizzly/it/resources/tables.sql",\
+            "grizzly/it/resources/tpch-scripts/create_tables.sql",\
+            "grizzly/it/resources/tpch/customer.sql",\
+            "grizzly/it/resources/tpch/lineitem.sql",\
+            "grizzly/it/resources/tpch/nation.sql",\
+            "grizzly/it/resources/tpch/orders.sql",\
+            "grizzly/it/resources/tpch/part.sql",\
+            "grizzly/it/resources/tpch/partsupp.sql",\
+            "grizzly/it/resources/tpch/region.sql",\
+            "grizzly/it/resources/tpch/supplier.sql",\
+            "grizzly/it/resources/tpch-scripts/create_pk.sql",\
+            "grizzly/it/resources/tpch-scripts/create_fk.sql"]
+  
+  
+  cnt = 0
+  for file in files:
+    logger.debug(f"processing {file}")
+
+    lines = []
+    with open(file, "rt") as f:
+      for line in f:
+        if len(line.strip()) > 1 and (not line.startswith("--")):
+          lines.append(line)
+
+    
+
+    lines = "".join(lines)
+    stmts = lines.split(";")
+    stmts = list(filter(lambda x: len(x.strip()) > 1, stmts))
+    # logger.debug(f"setup script has {len(stmts)} entries")
+    
+
+    cursor = con.cursor()
+    for stmt in stmts:
+      # logger.debug(stmt)
+      cursor.execute(stmt)
+      cnt += 1
+
+  con.commit()
+
+  logger.debug("now loading data into tables")
+
+
+
+  logger.info(f"finished DB setup: {cnt}")
+
 def loadTestConfig(dbName):
   
   configs = None
@@ -140,7 +189,10 @@ if __name__ == "__main__":
 
       logger.info("start running tests")
 
-      failedTests = runner.run(dbName, dbCon, alchemyCon, needsSetup = needsSetup)
+      if needsSetup:
+        setupDB(dbCon)
+
+      failedTests = runner.run(dbName, dbCon, alchemyCon)
       logger.info("finished running tests")
 
       summary[dbName] = failedTests

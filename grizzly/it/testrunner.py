@@ -22,45 +22,7 @@ class TestRunner(unittest.TestCase):
   def __init__(self):
     self.pandasResults = {}
   
-  @staticmethod
-  def initTables(con):
-    logger.debug("init DB")
-    files = ["grizzly/it/resources/tables.sql",\
-             "grizzly/it/resources/tpch-scripts/create_tables.sql",\
-             "grizzly/it/resources/tpch-scripts/create_pk.sql",\
-             "grizzly/it/resources/tpch-scripts/create_fk.sql"]
-    
-    
-    cnt = 0
-    for file in files:
-      logger.debug(f"processing {file}")
-
-      lines = []
-      with open(file, "rt") as f:
-        for line in f:
-          if len(line.strip()) > 1 and (not line.startswith("--")):
-            lines.append(line)
-
-      
-
-      lines = "\n".join(lines)
-      stmts = lines.split(";")
-      stmts = list(filter(lambda x: len(x.strip()) > 1, stmts))
-      logger.debug(f"setup script has {len(stmts)} entries")
-      
-
-      cursor = con.cursor()
-      for stmt in stmts:
-        cursor.execute(stmt)
-        cnt += 1
-
-    con.commit()
-    logger.info(f"finished DB setup: {cnt}")
-
-  def run(self, dbName: str, con, alchemyCon, needsSetup):
-
-    if needsSetup:
-      TestRunner.initTables(con)
+  def run(self, dbName: str, con, alchemyCon):
 
     logger.debug("init Grizzly")
     gen = SQLGenerator(dbName)
@@ -68,7 +30,7 @@ class TestRunner(unittest.TestCase):
     grizzly.use(executor)
 
 
-    logger.info("now run tests")
+    logger.debug("now run tests")
 
     failedTests = []
 
