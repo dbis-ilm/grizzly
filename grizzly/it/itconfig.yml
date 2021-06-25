@@ -29,7 +29,7 @@ vector:
   password: actian
   db: testdb
   port:
-    - 27839
     - 27832
     - 44223
+    - 27839
     - 16902
