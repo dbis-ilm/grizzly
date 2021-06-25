@@ -12,6 +12,6 @@ handlers:
     formatter: complex
 loggers:
   test:   
-    level: DEBUG
+    level: WARN
     handlers: [console]
     propagate: yes

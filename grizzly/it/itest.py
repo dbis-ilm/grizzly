@@ -31,7 +31,10 @@ def startDockerContainer(dbName:str, settings, dockerClient):
 
   isNewContainer = True
 
-  existingContainers = dockerClient.containers.list(filters={"name":containerName, "status":"exited"})
+  existingContainers = dockerClient.containers.list(all=True, filters={"name":containerName}) #, "status":"exited"
+
+  wasRunning = False
+
   if len(existingContainers) >= 1:
 
     logger.debug(f"found existing containers: {existingContainers}")
@@ -46,6 +49,10 @@ def startDockerContainer(dbName:str, settings, dockerClient):
     if container.status != "running":
       logger.debug(f"existing container is not running, trying to start it")
       container.start()
+    else:
+      logger.debug(f"existing container is already running...")
+      wasRunning = True
+    
 
   else:
     logger.debug("no existing container found, creating a new one")
@@ -74,7 +81,7 @@ def startDockerContainer(dbName:str, settings, dockerClient):
         dockerClient.containers.stop(container)
         dockerClient.containers.remove(container)
   
-  return (container, isNewContainer)
+  return (container, isNewContainer,wasRunning)
   
 def connectDB(dbName: str,settings: Dict):
 
@@ -175,12 +182,14 @@ if __name__ == "__main__":
     
     container = None
     needsSetup = startContainer
+    wasRunning = False
+
     if startContainer:
 
       import docker
 
       client = docker.from_env()
-      (container,needsSetup) = startDockerContainer(dbName,settings, client)
+      (container,needsSetup,wasRunning) = startDockerContainer(dbName,settings, client)
       logger.debug(f"created container: {container}")
 
     try:
@@ -192,14 +201,21 @@ if __name__ == "__main__":
       if needsSetup:
         setupDB(dbCon)
 
+      print(f"[{dbName}] ",end='')
       failedTests = runner.run(dbName, dbCon, alchemyCon)
+      if failedTests:
+        print(" \U0001F92C")
+      else:
+        print(" \U0001F43B")
       logger.info("finished running tests")
+
 
       summary[dbName] = failedTests
 
     finally:
-      if container is not None:
+      if container is not None and not wasRunning:
         logger.debug("cleaning up")
+        
         container.stop()
         logger.info(f"stopped container {container}")
 

@@ -68,12 +68,16 @@ class TestRunner(unittest.TestCase):
         grizzlyResult = e
 
 
-      if (isinstance(pandasResult, Exception) or isinstance(grizzlyResult, Exception)) or not self.compare(grizzlyResult, pandasResult):
-        # logger.error(f"{gScript} vs. {pScript} : {grizzlyResult} vs {pandasResult}")
+      cmp = self.compare(grizzlyResult, pandasResult)
+
+      if (isinstance(pandasResult, Exception) or isinstance(grizzlyResult, Exception)) or not cmp:
+        print('F', end='')
         failedTests.append((name, grizzlyResult, pandasResult))
+      else:
+        print('.',end='')
       
 
-
+    
     resultStr = "Passed" if len(failedTests) == 0 else "Failed"
     logger.info(f"finished tests [{len(scripts)}]: {resultStr}")
     return failedTests
