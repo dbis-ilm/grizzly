@@ -449,17 +449,29 @@ class SQLGenerator:
     paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
     returnType = SQLGenerator._mapTypes(udf.returnType)
 
+    template = templates["createfunction"]
+
+    leadingSpaces = 0
+    for line in "str".split("\n"):
+      if "$$code$$" in line:
+        leadingSpaces = line.find("$$code$$")
+        break
+
     if isinstance(udf, ModelUDF):
       lines = templates[udf.modelType.name + "_code"]
       for key, value in udf.templace_replacement_dict.items():
         lines = lines.replace(key, str(value))
 
     else:
-      lines = udf.lines[1:]
-      lines = SQLGenerator._unindent(lines)
-      lines = "".join(lines)
+      lines = udf.lines[1:] # remove signature
+      lines = SQLGenerator._unindent(lines) # unindent, depends on where in the script the function was defined
 
-    template = templates["createfunction"]
+      lines = [" "*leadingSpaces + line for line in lines] 
+
+      lines = "".join(lines) # put back together
+
+    print(lines)
+
     code = template.replace("$$name$$", udf.name)\
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\

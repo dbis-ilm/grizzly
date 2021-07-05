@@ -5,6 +5,8 @@ from typing import Dict
 import logging
 import yaml
 
+import time
+
 import logging.config
 
 with open('grizzly/it/logger.yml','rt') as f:
@@ -52,7 +54,8 @@ def startDockerContainer(dbName:str, settings, dockerClient):
     else:
       logger.debug(f"existing container is already running...")
       wasRunning = True
-    
+
+    time.sleep(3)    
 
   else:
     logger.debug("no existing container found, creating a new one")
@@ -184,6 +187,7 @@ if __name__ == "__main__":
     needsSetup = startContainer
     wasRunning = False
 
+    print(f"[{dbName}] ",end='')
     if startContainer:
 
       import docker
@@ -198,15 +202,22 @@ if __name__ == "__main__":
 
       logger.info("start running tests")
 
+
       if needsSetup:
         setupDB(dbCon)
+      
+      start = time.time()
 
-      print(f"[{dbName}] ",end='')
       failedTests = runner.run(dbName, dbCon, alchemyCon)
+
+      end = time.time()
+
       if failedTests:
-        print(" \U0001F92C")
+        print(" \U0001F92C",end='')
       else:
-        print(" \U0001F43B")
+        print(" \U0001F43B", end='')
+
+      print(f"\t{(end - start):.5f} secs")  
       logger.info("finished running tests")
 
 

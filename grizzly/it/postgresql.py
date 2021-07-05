@@ -4,8 +4,7 @@ import psycopg2
 logger=logging.getLogger("test")
 
 def connect(user: str, passwd: str, db: str, port: int):
-  import time
-  time.sleep(10) # wait 10 seconds until the server has started up
+  
   logger.debug(f"about to connect to PostgreSQL: {user}:{passwd} @ {db} on port {port}")
   con = psycopg2.connect(dbname=db, user=user, password=passwd,host="localhost",port=port)
 

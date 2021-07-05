@@ -78,7 +78,7 @@ monetdb:
     }; 
   externaltable:
     - DROP LOADER IF EXISTS csv_loader;
-    - CREATE TEMPORARY TABLE $$name$$($$schema$$) # FROM LOADER csv_loader('$$filenames$$');
+    - CREATE TEMPORARY TABLE $$name$$($$schema$$) 
     - COPY OFFSET $$monetdboffset$$ INTO $$name$$  FROM '$$filenames$$'
     # - | 
     #   CREATE LOADER csv_loader(filename STRING) LANGUAGE PYTHON {
