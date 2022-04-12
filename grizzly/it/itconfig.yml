@@ -1,5 +1,5 @@
 postgresql:
-  image: postgres
+  image: postgres:13
   environment:
     POSTGRES_PASSWORD: example  
   user: postgres
@@ -19,8 +19,9 @@ monetdb:
   port: 50000
   db: demo
   container_setup: 
+    - rpm --import https://dev.monetdb.org/downloads/MonetDB-GPG-KEY
+    - dnf install -y python3 python3-pip MonetDB-python3
     - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
-    - dnf install -y https://www.monetdb.org/downloads/Fedora/33/x86_64/MonetDB-python3-11.39.17-20210503.fc33.x86_64.rpm
     - monetdb set embedpy3=yes demo
 
 vector:
