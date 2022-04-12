@@ -470,7 +470,7 @@ class SQLGenerator:
 
       lines = "".join(lines) # put back together
 
-    print(lines)
+    # print(lines)
 
     code = template.replace("$$name$$", udf.name)\
       .replace("$$inparams$$",paramsStr)\

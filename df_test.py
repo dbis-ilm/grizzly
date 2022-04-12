@@ -263,8 +263,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
     
     with self.assertRaises(SchemaError):
-      cnt = df.sum('actor1name')
-      print(cnt)
+      df.sum('actor1name')
 
     # self.assertLessEqual(cnt, "A US")
 
@@ -299,8 +298,7 @@ class DataFrameTest(CodeMatcher):
     df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
     
     with self.assertRaises(SchemaError):
-      cnt = df.mean('actor1name')
-      print(cnt)
+      df.mean('actor1name')
 
     # self.assertLessEqual(cnt, "A US")
 
