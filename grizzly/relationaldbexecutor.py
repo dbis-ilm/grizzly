@@ -1,8 +1,11 @@
-from grizzly.generator import GrizzlyGenerator
+# from grizzly.generator import GrizzlyGenerator
+from unicodedata import decimal
 from grizzly.sqlgenerator import SQLGenerator
 
 import logging
 from typing import List
+from decimal import Decimal
+
 logger = logging.getLogger(__name__)
 
 class RelationalExecutor(object):
@@ -69,10 +72,12 @@ class RelationalExecutor(object):
 
     def convert(i):
       t = type(i)
-      if t is not int and t is not float and t is not str and t is not bool:
-        return str(i)
-      else:
+      if t is int or t is float or t is str or t is bool:
         return i
+      elif isinstance(i, Decimal):
+        return float(i)
+      else:
+        return str(i)
 
     for row in rs:
       # if the driver returns the tuple as some specialiced class (e.g. a Row implementation) 
