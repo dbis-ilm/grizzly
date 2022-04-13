@@ -20,6 +20,6 @@ def run(con, alchemyCon):
   g = j.groupby(["l_orderkey", "o_orderdate", "o_shippriority"])
   g = g.sum("calculated", "revenue")
   g = g[["l_orderkey", "revenue", "o_orderdate", "o_shippriority"]] # bring cols in expected order
-  # g = g.sort_values(["revenue desc", "o_orderdate"])
+  g = g.sort_values(["l_orderkey", "revenue", "o_orderdate", "o_shippriority"])
   g = g.limit(100)
   return g

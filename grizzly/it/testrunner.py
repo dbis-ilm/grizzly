@@ -111,7 +111,23 @@ class TestRunner(unittest.TestCase):
       try:
         pList = pandasResult.values.tolist()
         
-        self.assertListEqual(pList, grizzlyResult)
+        # self.assertListEqual(pList, grizzlyResult)
+
+        if len(grizzlyResult) != len(pList):
+          print(f"df lengths mismatch G={len(grizzlyResult)} vs P={len(pList)}")
+          return False
+
+        for (t1,t2) in zip(grizzlyResult, pList):
+          if len(t1) != len(t2):
+            print(f"tuple lengths mismatch G={len(grizzlyResult)} vs P={len(pList)}: G={t1} vs P={t2}")
+            return False
+
+          for (v1, v2) in zip(t1,t2):
+            if isinstance(v1,float) or isinstance(v2, float):
+              self.assertAlmostEqual(v1,v2, 4, f"float comparison mismatch: G={v1} vs P={v2}")
+            else:
+              self.assertTrue(v1 == v2, f"value mismatch G={v1} vs P={v2}")
+
         return True
       except Exception as e:
         logger.debug(f"failed to match DF results results: {e}")

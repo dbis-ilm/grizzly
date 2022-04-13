@@ -12,4 +12,5 @@ def run(con, alchemyCon):
   df["prionum"] = df["o_orderpriority"].map(prioToInt)
   df = df[[df.prionum, df.o_orderkey]]
   df = df.limit(10)
+  df = df.sort_values(by=["prionum","o_orderkey"])
   return df

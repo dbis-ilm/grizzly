@@ -1,6 +1,7 @@
 import pandas as pd
 def run(con, alchemyCon):
   o = pd.read_sql_table("orders", alchemyCon)
+  
   c = pd.read_sql_table("customer", alchemyCon)
   l = pd.read_sql_table("lineitem", alchemyCon)
 
@@ -15,7 +16,10 @@ def run(con, alchemyCon):
   j = j.merge(l, left_on = "o_orderkey", right_on="l_orderkey")
 
   g = j.groupby(["l_orderkey", "o_orderdate", "o_shippriority"], as_index=False)["calculated"].sum().rename(columns={"calculated":"revenue"})
-  # g = g[["l_orderkey", "revenue", "o_orderdate", "o_shippriority"]] # bring cols in expected order
-  #g = g.sort_values(["revenue", "o_orderdate"], ascending=[False, True])
+  g = g[["l_orderkey", "revenue", "o_orderdate", "o_shippriority"]] # bring cols in expected order
+  g = g.sort_values(["l_orderkey", "revenue", "o_orderdate", "o_shippriority"])
   g = g.head(100)
+
+  g["o_orderdate"] = g["o_orderdate"].dt.date.astype(str)
+  # g["revenue"] = g["revenue"].round(decimals=4)
   return g
