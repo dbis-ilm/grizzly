@@ -156,7 +156,7 @@ class ArithmExpr(BinaryExpression):
     super().__init__(left, right, operand)
 
 class BoolExpr(BinaryExpression):
-  def __init__(self, left: Expr, right: Expr, operand: BooleanOperation):
+  def __init__(self, left: Expr, right: Expr, operand: BinaryExpression):
     super().__init__(left, right, operand)
 
 class LogicExpr(BinaryExpression):
@@ -200,7 +200,7 @@ class ModelUDF(UDF):
     self.templace_replacement_dict = template_replacement_dict
 
 class FuncCall(Expr):
-  def __init__(self, funcName: str, inputCols: List, udf: UDF = None, alias: str = ""):
+  def __init__(self, funcName, inputCols: List, udf: UDF = None, alias: str = ""):
     self.funcName = funcName
     self.inputCols = inputCols
     self.udf = udf
@@ -254,14 +254,13 @@ class ColRef(Expr):
   # A ColRef might be used just like a projection, thus, 
   # we mimic the DF API here and return a projection, followed by 
   # the according operation
-  def __getattribute__(self, name: str):
-    try:
-      # first try to find the regular method on a ColRef
-      return super().__getattribute__(name)
-    except:
-      # if it does not exist, it might be a DF operation -> try to execute this
+  def __getattr__(self, name: str):
+    
+    if not hasattr(super(), name):
       p = self.df.project(self.column)
-      return p.__getattribute__(name)
+      return getattr(p, name)
+    
+    return getattr(self, name)
 
   def __getitem__(self, expr):
     if isinstance(expr, str):
