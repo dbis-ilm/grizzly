@@ -36,6 +36,7 @@ test:monetdb:
     - dnf install -y python3 python3-pip MonetDB-python3
     - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
     - monetdb set embedpy3=yes demo #enable python
+    - monetdbd start -n /var/monetdb5/dbfarm &
   script:
     python -m grizzly.it.itest nodocker monetdb
 
@@ -45,7 +46,9 @@ test:postgresql:
     - grouprunner
   before_script:
     - apt-get update
-    - apt-get install  -y postgresql-plpython3-13
+    - apt-get install  -y postgresql-plpython3-13 python3 python3-pip
+    - pip3 install wheel pyyaml psycopg2-binary pandas sqlalchemy
+    - /usr/local/bin/docker-entrypoint.sh postgres &
     - psql -U postgres -c "create language plpython3u"
     - psql -U postgres -c "CREATE EXTENSION file_fdw"
   script:
