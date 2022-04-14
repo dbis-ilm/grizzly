@@ -454,9 +454,10 @@ class SQLGenerator:
 
     paramsStr = ""
 
-    # remove signature
-    signature = udf.lines[0]
-    udf.lines = udf.lines[1:]
+    if not isinstance(udf, ModelUDF):
+      # remove signature
+      signature = udf.lines[0]
+      lines = udf.lines[1:]
 
     # e.g. MonetDB passes vectors to UDF. If the user expects scalar values we have to wrap it manually but maintain variable names!
     if vectorsArePassed and not isVectorizedFunction: 
@@ -466,7 +467,7 @@ class SQLGenerator:
       varNames = [f"{p.name}" for p in udf.params ] # var names to use in loop
       varNamesStr = ",".join(varNames)
 
-      udf.lines = [signature.replace(udf.name, "_"+udf.name)] + udf.lines
+      lines = [signature.replace(udf.name, "_"+udf.name)] + lines
 
       loop = ""
 
@@ -476,7 +477,7 @@ class SQLGenerator:
       else:
         loop = f"return [ _{udf.name}({varNamesStr}) for {varNamesStr} in {paramNamesStr} ]\n"
 
-      udf.lines.append(loop)
+      lines.append(loop)
     else:
       paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type, templates['types'])}" for p in udf.params])
 
@@ -485,7 +486,8 @@ class SQLGenerator:
     leadingSpaces = 0
     for line in template.split("\n"):
       if "$$code$$" in line:
-        leadingSpaces = line.find("$$code$$")
+        # leadingSpaces = line.find("$$code$$")
+        leadingSpaces = len(line) - len(line.lstrip())
         break
 
     if isinstance(udf, ModelUDF):
@@ -494,7 +496,7 @@ class SQLGenerator:
         lines = lines.replace(key, str(value))
 
     else:
-      lines = udf.lines
+      # lines = udf.lines
       lines = SQLGenerator._unindent(lines) # unindent, depends on where in the script the function was defined
 
       lines = [" "*leadingSpaces + line for line in lines] 
