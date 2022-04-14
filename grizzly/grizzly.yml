@@ -1,4 +1,8 @@
 postgresql:
+
+  types:
+    str: text
+
   limit: limit
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
   externaltable: 
@@ -62,6 +66,8 @@ postgresql:
   coltype_column: 1
 
 sqlite:
+  types:
+    str: text
   limit: limit
 
   schema_query: PRAGMA table_info($$tablename$$)
@@ -69,13 +75,19 @@ sqlite:
   coltype_column: 2
 
 monetdb:
+  types:
+    str: string
+
   limit: limit
+  # createvectorizedfunction: |
+  #   CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE python { 
+  #   $$code$$ 
+  #   }; 
+  vectorized_udfs: True
   createfunction: | 
-    CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) 
-    RETURNS $$returntype$$ 
-    LANGUAGE python { 
+    CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE python { 
     $$code$$ 
-    }; 
+    };   
   externaltable:
     - DROP LOADER IF EXISTS csv_loader;
     - CREATE TEMPORARY TABLE $$name$$($$schema$$) 
@@ -112,6 +124,8 @@ monetdb:
     
 
 vector:
+  types:
+    str: varchar(1024)
   limit: top
   createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
   externaltable: 

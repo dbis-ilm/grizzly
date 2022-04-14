@@ -22,7 +22,6 @@ class SQLGenerator:
     self.templates = Config.loadProfile(profile)
     super().__init__()
 
-  
   @staticmethod
   def _unindent(lines: List[str]) -> List[str]:
     firstLine = lines[0]
@@ -30,18 +29,19 @@ class SQLGenerator:
     numLeadingSpaces = len(firstLine) - len(firstLine.lstrip())
     resultLines = []
     for line in lines:
-      resultLines.append(line[numLeadingSpaces:])
+      line = line[numLeadingSpaces:]
+      if line.strip() == "":
+        line = "\n"
+      resultLines.append(line)
 
     return resultLines
 
   @staticmethod
-  def _mapTypes(pythonType: str) -> str:
-    if pythonType == "str":
-      return "varchar(1024)"
-    # elif pythonType == "long":
-    #   return "bigint"
-    else: 
-      return pythonType
+  def _mapTypes(pythonType: str, mapping) -> str:
+    if pythonType in mapping:
+      return mapping[pythonType]
+    
+    return pythonType
 
   @staticmethod
   def _mapFromSQLTypes(sqlType: str):
@@ -446,13 +446,44 @@ class SQLGenerator:
 
   @staticmethod
   def _generateCreateFunc(udf: UDF, templates) -> str:
-    paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
-    returnType = SQLGenerator._mapTypes(udf.returnType)
+    isVectorizedFunction = udf.name.startswith("vec_")
+
+    vectorsArePassed = templates["vectorized_udfs"] if "vectorized_udfs" in templates else False
 
     template = templates["createfunction"]
 
+    paramsStr = ""
+
+    # remove signature
+    signature = udf.lines[0]
+    udf.lines = udf.lines[1:]
+
+    # e.g. MonetDB passes vectors to UDF. If the user expects scalar values we have to wrap it manually but maintain variable names!
+    if vectorsArePassed and not isVectorizedFunction: 
+      paramNames = [f"_{p.name}" for p in udf.params ] # input param names
+      paramNamesStr = ",".join(paramNames)
+      paramsStr = ",".join([f"{n} {SQLGenerator._mapTypes(p.type, templates['types'])}" for (n, p) in zip(paramNames, udf.params)]) # param declaration in signature
+      varNames = [f"{p.name}" for p in udf.params ] # var names to use in loop
+      varNamesStr = ",".join(varNames)
+
+      udf.lines = [signature.replace(udf.name, "_"+udf.name)] + udf.lines
+
+      loop = ""
+
+      if len(udf.params) > 1:
+        # loop = f"for ({varNamesStr}) in zip({paramNamesStr}):\n"
+        loop = f"return [ _{udf.name}({varNamesStr}) for ({varNamesStr}) in zip({paramNamesStr}) ]\n"
+      else:
+        loop = f"return [ _{udf.name}({varNamesStr}) for {varNamesStr} in {paramNamesStr} ]\n"
+
+      udf.lines.append(loop)
+    else:
+      paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type, templates['types'])}" for p in udf.params])
+
+    returnType = SQLGenerator._mapTypes(udf.returnType, templates['types'])
+    
     leadingSpaces = 0
-    for line in "str".split("\n"):
+    for line in template.split("\n"):
       if "$$code$$" in line:
         leadingSpaces = line.find("$$code$$")
         break
@@ -463,7 +494,7 @@ class SQLGenerator:
         lines = lines.replace(key, str(value))
 
     else:
-      lines = udf.lines[1:] # remove signature
+      lines = udf.lines
       lines = SQLGenerator._unindent(lines) # unindent, depends on where in the script the function was defined
 
       lines = [" "*leadingSpaces + line for line in lines] 
@@ -476,6 +507,7 @@ class SQLGenerator:
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\
       .replace("$$code$$",lines)
+
     return code
 
   @staticmethod
