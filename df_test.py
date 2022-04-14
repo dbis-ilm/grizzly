@@ -378,7 +378,7 @@ class DataFrameTest(CodeMatcher):
     
     sql = "select computed, count($t1.*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
 
-    expected = f"""create or replace function mymod(s varchar(1024)) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
+    expected = f"""create or replace function mymod(s text) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
 
     GrizzlyGenerator._backend.queryGenerator = oldGen
 
@@ -744,7 +744,7 @@ class DataFrameTest(CodeMatcher):
 
     actual = df.generateQuery()
 
-    expected = f"""create or replace function myfunc(a int) returns varchar(1024) language plpython3u as 'return a+"_grizzly"' parallel safe;{sql}"""
+    expected = f"""create or replace function myfunc(a int) returns text language plpython3u as 'return a+"_grizzly"' parallel safe;{sql}"""
 
     GrizzlyGenerator._backend.queryGenerator = oldGen
 
@@ -1107,7 +1107,7 @@ class DataFrameTest(CodeMatcher):
       # df.show(pretty = True)
 
       actual = df.generateQuery()
-      expected = """CREATE OR REPLACE FUNCTION apply(input varchar(1024)) RETURNS varchar(1024) LANGUAGE plpython3u AS 'import onnxruntime
+      expected = """CREATE OR REPLACE FUNCTION apply(input text) RETURNS text LANGUAGE plpython3u AS 'import onnxruntime
 import random
 def apply(input: str) -> str:
       def input_to_tensor(input:str):
@@ -1183,7 +1183,7 @@ return apply(input)
 
     df["newcol"] = df["actor1name"].map(myfunc)
     actual = df.describe().generateQuery()
-    expected = """CREATE OR REPLACE FUNCTION myfunc(i varchar(1024)) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
+    expected = """CREATE OR REPLACE FUNCTION myfunc(i text) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
     l = l + l
     return l
     ' parallel safe;
