@@ -6,6 +6,7 @@ from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, Bina
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
 
+
 import inspect
 
 from collections import namedtuple
@@ -68,8 +69,13 @@ class DataFrame(object):
       return x
 
   def hasColumn(self, colName):
-    if len(self.schema) <= 0:
+
+    if isinstance(colName, ColRef):
+      colName = colName.colName()
+
+    if len(self.schema) <= 0 or colName is None or len(colName.strip()) == 0:
       return True
+
 
     hasCol = colName.lower() in self.schema
     return hasCol
@@ -558,19 +564,18 @@ class DataFrame(object):
     return GrizzlyGenerator.aggregate(self, f)
 
   def agg(self, aggType, col, alias = None):
-    if isinstance(col,str):
-      col = ColRef(col, self)
 
-    f = FuncCall(aggType, [col], None, alias)
+    theCol = DataFrame._getFuncCallCol(self, col)
 
-    if isinstance(self, Grouping):
-      if not col.column in [c.column for c in self.groupCols]:
-        
-        self._addAggFunc(f)
-        return self
-      else: 
-        p = Projection([f], self)
-        return p
+    f = FuncCall(aggType, theCol, None, alias)
+    
+    # the aggregate is to be called on either the grouping column (if there is a grouping)
+    # or on any other column. Thus, check if this column is present in the schema.
+    if not self.hasColumn(theCol[0]):
+      raise SchemaError("No such column: "+str(theCol[0]))
+
+    p = Projection([f], self)
+    return p
     
 
   @staticmethod
@@ -800,7 +805,29 @@ class Projection(DataFrame):
 
     super().__init__(newSchema, parent,GrizzlyGenerator._incrAndGetTupleVar())
 
-  
+  def agg(self, aggType, col, alias = None):
+
+    # if we have only aggregate functions, just add this one to the projection list
+    nonFuncs = list(filter(lambda c: not isinstance(c, FuncCall), self.columns))
+    if len(nonFuncs) > 0:
+      # we have non-FuncCall columns -> not everything is an aggregate function
+      # thus, we need a new projection
+      return super().agg(aggType, col, alias)
+
+
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(aggType, theCol, None, alias)
+
+    # add the new FuncCall to the list and adapt Schema
+    self._addToList(f)
+
+    return self
+
+  def _addToList(self, col):
+    c = self.updateRef(col)
+    self.columns.append(c)
+    self.schema.append(c)
+
 
 class Filter(DataFrame):
 
@@ -839,6 +866,22 @@ class Grouping(DataFrame):
     
     newSchema = parent.schema.infer(self.groupCols)
     super().__init__(newSchema, parent, GrizzlyGenerator._incrAndGetTupleVar())
+
+  def agg(self, aggType, col, alias = None):
+    # if this is called on a grouping, add the aggregation function - 
+    # BUT only if it is not called on a grouping column
+    # 
+    # if the aggregation is called on a grouping column, then add a new projection
+    #
+    # if it is not a Grouping, then also add a new projection 
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(aggType, theCol, None, alias)
+
+    if not theCol[0].column in [c.column for c in self.groupCols]:
+      self._addAggFunc(f)
+      return self
+
+    return super().agg(aggType, col, alias)
 
   def _addAggFunc(self,funcCall: FuncCall):
     self.aggFunc.append(funcCall)
@@ -1053,4 +1096,3 @@ class Traverser:
         todo.put_nowait(parent)
       
       visitorFunc(current)    
-

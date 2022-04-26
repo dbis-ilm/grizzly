@@ -1,3 +1,4 @@
+from ast import alias
 from grizzly.dataframes.schema import ColType, SchemaError
 from grizzly.expression import ExpressionException
 import unittest
@@ -38,6 +39,44 @@ class DataFrameTest(CodeMatcher):
     expected = {"globaleventid":ColType.NUMERIC, "actor1name": ColType.TEXT, "actiongeo_long":ColType.NUMERIC,"actor1countrycode":ColType.TEXT}
 
     self.assertDictEqual(expected, df.schema.typeDict)
+
+  def test_aggNoGroupOnProjCol(self):
+    df = grizzly.read_table('events')
+    res = df[['globaleventid', 'actor2name', 'nummentions', 'numarticles']]
+    a = res.agg(col='numarticles', aggType=AggregateType.MEAN)
+    
+    actual = a.generateQuery()
+    expected = "select avg($t2.numarticles) FROM (select $t1.globaleventid, $t1.actor2name, $t1.nummentions, $t1.numarticles FROM (select * from events $t0) $t1) $t2"
+
+    self.matchSnipped(actual, expected)
+
+  def test_aggTwiceNoGroup(self):
+    df = grizzly.read_table('events')
+    df = df[['globaleventid', 'actor2name', 'nummentions', 'numarticles']]
+    df = df.agg(col = "nummentions", aggType=AggregateType.MIN, alias = "min_mentions")
+    df = df.agg(col = "numarticles", aggType=AggregateType.MAX, alias = "max_articles")
+
+    actual = df.generateQuery()
+    expected = "select min($t2.nummentions) as min_mentions, max($t2.numarticles) as max_articles FROM (select $t1.globaleventid, $t1.actor2name, $t1.nummentions, $t1.numarticles FROM (select * from events $t0) $t1) $t2"
+
+    self.matchSnipped(actual, expected)
+
+
+  def test_aggNoGroupOnMissingCol(self):
+    df = grizzly.read_table('events')
+    res = df[['globaleventid', 'actor2name', 'nummentions']]
+
+    self.assertRaises(grizzly.SchemaError, lambda: res.agg(col='numarticles', aggType=AggregateType.MEAN))
+
+
+  def test_aggNoGroupOnMissingColNoSchema(self):
+    df = grizzly.read_table('events')
+    df = df.agg(col='numarticles', aggType=AggregateType.MEAN)
+
+    actual = df.generateQuery()
+    expected = "select avg($t2.numarticles) FROM (select * from events $t0) $t1"
+
+    self.matchSnipped(actual, expected)
 
   def test_groupby(self):
     df = grizzly.read_table("events")
