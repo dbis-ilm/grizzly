@@ -48,27 +48,27 @@ class DataFrame(object):
   def schema(self):
     return self._schema
 
-  def updateRef(self, x):                                                                                               
+  def _updateRef(self, x):                                                                                               
     if isinstance(x,ColRef):                                                                                            
       x.df = self                                                                                                       
       return x                                                                                                          
     elif isinstance(x, FuncCall):                                                                                       
       for ic in x.inputCols:
-        self.updateRef(ic)                                                                                                       
+        self._updateRef(ic)                                                                                                       
       return x                                                                                                          
     elif isinstance(x, str): # if only a string was given as column name                                                
       ref = ColRef(x, self)                                                                                             
       return ref   
     elif isinstance(x, BinaryExpression):
       if x.left:                                                                                           
-        x.left = self.updateRef(x.left) if isinstance(x.left, Expr) else x.left                                           
+        x.left = self._updateRef(x.left) if isinstance(x.left, Expr) else x.left                                           
       if x.right:
-        x.right = self.updateRef(x.right) if isinstance(x.right, Expr) else x.right
+        x.right = self._updateRef(x.right) if isinstance(x.right, Expr) else x.right
       return x
     else:
       return x
 
-  def hasColumn(self, colName):
+  def _hasColumn(self, colName):
 
     if isinstance(colName, ColRef):
       colName = colName.colName()
@@ -96,7 +96,7 @@ class DataFrame(object):
       lOn = None
       rOn = None
       from grizzly.expression import ExpressionException
-      if not self.hasColumn(on[0]):
+      if not self._hasColumn(on[0]):
         raise ExpressionException(f"No such column {on[0]} for join in left hand side")
       else:
         lOn = ColRef(on[0], self)
@@ -144,7 +144,7 @@ class DataFrame(object):
       raise ValueError(f"List of columns and list of orders must be equal")
     return Ordering(by, ascending, self)
 
-  def _map(self, func, lines=[]):
+  def map(self, func):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
@@ -177,11 +177,7 @@ class DataFrame(object):
     elif isinstance(func, DataFrame):
       return self.join(func, on = None, how = "natural")
     else:
-      print(f"error: {func} is not a function or other DataFrame")
-      exit(1)
-
-  def map(self, func):
-    return self._map(func)
+      raise ValueError(f"{func} is not a function or other DataFrame")
 
 
   ###################################
@@ -252,7 +248,7 @@ class DataFrame(object):
       if isinstance(value, FuncCall):
         value.alias = key
         newCol = value
-        self.updateRef(value)
+        self._updateRef(value)
       else:
         newCol = ComputedCol(value, key)
 
@@ -449,7 +445,7 @@ class DataFrame(object):
     
     # the aggregate is to be called on either the grouping column (if there is a grouping)
     # or on any other column. Thus, check if this column is present in the schema.
-    if not self.hasColumn(theCol[0]):
+    if not self._hasColumn(theCol[0]):
       raise SchemaError("No such column: "+str(theCol[0]))
 
     p = Projection([f], self)
@@ -501,10 +497,6 @@ class DataFrame(object):
     if col is None:
       col = self.schema.columns(filterFunc)
     elif not isinstance(col, list):
-      # theCol = DataFrame._getFuncCallCol(self, col)[0]
-      # colType = self.schema._inferType(theCol)
-      # if not filterFunc(("",colType)):
-      #   raise SchemaError("column is not applicable!")
       col = [col]
 
     aggName = AggregateType.getName(aggType)
@@ -568,11 +560,15 @@ class DataFrame(object):
     if not isinstance(self, Ordering):
       raise ValueError("can get tail only of ordered DataFrame")
 
-    cntFunc = FuncCall(AggregateType.COUNT, [])
+
+    # add a count 
+    cntFunc = FuncCall(AggregateType.COUNT, inputCols=[])
     prj = self.project(cntFunc)
+
+    # add the offset: count - n
     expr = ArithmExpr(prj, Constant(n), ArithmeticOperation.SUB)
 
-    return self.limit(n, expr).collect()
+    return self.limit(n=n, offset=expr).collect()
     
   # def __str__(self):
   #   strRep = GrizzlyGenerator.toString(self, pretty=True)
@@ -631,7 +627,7 @@ class Projection(DataFrame):
 
         parent.schema.check(col)
 
-        theCol = self.updateRef(col)
+        theCol = self._updateRef(col)
       else:
         theCol = col
       theCols.append(theCol)
@@ -661,7 +657,7 @@ class Projection(DataFrame):
     return self
 
   def _addToList(self, col):
-    c = self.updateRef(col)
+    c = self._updateRef(col)
     self.columns.append(c)
     self.schema.append(c)
 
@@ -791,7 +787,7 @@ class Filter(DataFrame):
   def __init__(self, expr: Expr, parent: DataFrame):
 
     parent.schema.check(expr)
-    self.expr = self.updateRef(expr)
+    self.expr = self._updateRef(expr)
     super().__init__(parent.schema, parent,GrizzlyGenerator._incrAndGetTupleVar())
 
 class Grouping(DataFrame):
@@ -809,7 +805,7 @@ class Grouping(DataFrame):
           theRef = ColRef(theCol, self)
         theCol = theRef
       elif isinstance(theCol, ColRef):
-        self.updateRef(theCol)
+        self._updateRef(theCol)
       elif isinstance(theCol, Expr):
         pass
       else: 
@@ -874,7 +870,7 @@ class Grouping(DataFrame):
     
     return super().filter(expr)
 
-  def sum(self, col = None, alias = None):
+  def sum(self, col, alias = None):
     if col is None:
         raise ValueError("must specify a column to aggregate!")
 
@@ -890,7 +886,7 @@ class Grouping(DataFrame):
     f = FuncCall(AggregateType.COUNT, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
-  def min(self, col = None, alias = None):
+  def min(self, col, alias = None):
     if col is None:
         raise ValueError("must specify a column to aggregate!")
 
@@ -898,7 +894,7 @@ class Grouping(DataFrame):
     f = FuncCall(AggregateType.MIN, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
-  def max(self, col = None, alias = None):
+  def max(self, col, alias = None):
     if col is None:
       raise ValueError("must specify a column to aggregate!")
 
@@ -906,7 +902,7 @@ class Grouping(DataFrame):
     f = FuncCall(AggregateType.MAX, theCol, None, alias)
     return self._exec_or_add_aggr(f)
 
-  def mean(self, col = None, alias = None):
+  def mean(self, col, alias = None):
     if col is None:
       raise ValueError("must specify a column to aggregate!")
 
@@ -963,11 +959,11 @@ class Ordering(DataFrame):
     sortCols = []
     for col in by:
       if isinstance(col, Projection):
-        sortCols.append(self.updateRef(col.columns[0]))
+        sortCols.append(self._updateRef(col.columns[0]))
       elif isinstance(col, str):
         sortCols.append(ColRef(col, self))
       elif isinstance(col, ColRef):
-        sortCols.append(self.updateRef(col))
+        sortCols.append(self._updateRef(col))
       else:
         raise ExpressionException(f"unsupported type for oder by value: {type(col)}")
 
