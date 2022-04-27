@@ -87,11 +87,7 @@ class DataFrame(object):
     return Projection(cols, self, doDistinct=distinct)
 
   def distinct(self):
-    if isinstance(self, Projection):
-      self.doDistinct = True
-      return self
-    else:
-      return Projection(None, self, doDistinct = True)
+    return Projection(None, self, doDistinct = True)
 
   def join(self, other, on, how="inner", comp = "="):
 
@@ -184,123 +180,6 @@ class DataFrame(object):
       print(f"error: {func} is not a function or other DataFrame")
       exit(1)
 
-  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: List, n_predictions: int = 1, *helperFuncs):
-
-    if not isinstance(self, Projection):
-      ValueError("classification can only be applied to a projection")
-    if len(outputDict) <= 0:
-      raise ValueError("output dict must not be empty")
-
-    sqlGenerator = GrizzlyGenerator._backend.queryGenerator
-
-    modelPathHash = abs(hash(path))
-    funcName = f"grizzly_predict_{modelPathHash}"
-    attrsString = "_".join([r.column for r in self.columns])
-
-    sig = inspect.signature(toTensorFunc)
-    fparams = sig.parameters
-    if len(fparams) != 1:
-      raise ValueError("toTensor converter must have exactly one parameter")
-
-    toTensorInputType = sig.parameters[list(sig.parameters)[0]].annotation.__name__
-    params = [Param("invalue", toTensorInputType), Param("n_predictions", "int")]
-    paramsStr = ",".join([f"{p.name} {sqlGenerator._mapTypes(p.type)}" for p in params])
-
-    # predictedType = type(outputDict[0]).__name__
-    predictedType = "str"  # hard coded string because we collect n predictions in a list of strings
-
-    helpers = list(helperFuncs)
-    helperCode = "\n"
-    for helperFunc in helpers:
-      (funcLines, _) = inspect.getsourcelines(helperFunc)
-      funcLines = sqlGenerator._unindent(funcLines)
-      helperCode += "".join(funcLines)
-
-    (encoderCode, _) = inspect.getsourcelines(toTensorFunc)
-    encoderCode = sqlGenerator._unindent(encoderCode)
-    encoderCode = "".join(encoderCode)
-
-    converter = lambda x: f"\"{x}\"" if type(x) == str else f"{x}"
-    outDictCode = "[" + ",".join(map(converter, outputDict)) + "]"
-
-    modelParameters = ",".join(map(converter, clazzParameters)) if clazzParameters else ""
-
-    (clazzCodeLst, _) = inspect.getsourcelines(clazz)
-    clazzCode = "".join(clazzCodeLst)
-
-    template_replacement_dict = {}
-    template_replacement_dict["$$modelpathhash$$"] = modelPathHash
-    template_replacement_dict["$$modelpath$$"] = path
-    template_replacement_dict["$$encoderfuncname$$"] = toTensorFunc.__name__
-    template_replacement_dict["$$helpers$$"] = helperCode
-    template_replacement_dict["$$encoder$$"] = encoderCode
-    template_replacement_dict["$$inputcols$$"] = paramsStr
-    template_replacement_dict["$$outputdict$$"] = outDictCode
-    template_replacement_dict["$$modelclassparameters$$"] = modelParameters
-    template_replacement_dict["$$modelclassname$$"] = clazz.__name__
-    template_replacement_dict["$$modelclassdef$$"] = clazzCode
-    udf = ModelUDF(funcName, params, predictedType, ModelType.TORCH, template_replacement_dict)
-    call = FuncCall(funcName, self.columns + [n_predictions] , udf, f"predicted_{attrsString}")
-
-    # return self.project([call])
-    return call
-
-  def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
-    funcName = "apply"
-    attrsString = "_".join([r.column for r in self.columns])
-    in_sig = inspect.signature(input_to_tensor)
-    input_names = list(in_sig.parameters.keys())
-    input_names_str = ','.join(input_names)
-    (lines1, _) = inspect.getsourcelines(input_to_tensor)
-    params = []
-    for param in in_sig.parameters:
-      type = in_sig.parameters[param].annotation.__name__
-      if (type == "_empty"):
-        raise ValueError("Input converter function must specify parameter types")
-      params.append(Param(param, type))
-
-    out_sig = inspect.signature(tensor_to_output)
-    (lines2, _) = inspect.getsourcelines(tensor_to_output)
-    returntype = out_sig.return_annotation.__name__
-    if (returntype == "_empty"):
-      raise ValueError("Output converter function must specify the return type")
-
-    template_replacement_dict = {}
-    template_replacement_dict["$$inputs$$"] = str(in_sig)
-    template_replacement_dict["$$returntype$$"] = returntype
-    template_replacement_dict["$$input_to_tensor_func$$"] = "".join(lines1)
-    template_replacement_dict["$$tensor_to_output_func$$"] = "".join(lines2)
-    template_replacement_dict["$$input_names$$"] = input_names_str
-    template_replacement_dict["$$onnx_file_path$$"] = onnx_path
-    template_replacement_dict["$$input_to_tensor_func_name$$"] = input_to_tensor.__name__
-    template_replacement_dict["$$tensor_to_output_func_name$$"] = tensor_to_output.__name__
-
-    udf = ModelUDF(funcName, params, returntype, ModelType.ONNX, template_replacement_dict)
-    call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
-
-    # return self.project([call])
-    return call
-
-  def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
-    funcName = "apply"
-    attrsString = "_".join([r.column for r in self.columns])
-
-    # TODO: make this generic
-    params = [Param("a", "str")]
-    returntype = "int"
-
-    template_replacement_dict = {}
-    template_replacement_dict["$$tf_checkpoint_file$$"] = tf_checkpoint_file
-    template_replacement_dict["$$vocab_file$$"] = vocab_file
-    template_replacement_dict["$$network_input_names$$"] = f"""[{', '.join('"%s"' % n for n in network_input_names)}]"""
-    template_replacement_dict["$$constants$$"] = f"[{','.join(str(item) for item in constants)}]"
-
-    udf = ModelUDF(funcName, params, returntype, ModelType.TF, template_replacement_dict)
-    call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
-
-    # return self.project([call])
-    return call
-
   def map(self, func):
     return self._map(func)
 
@@ -376,7 +255,6 @@ class DataFrame(object):
         self.updateRef(value)
       else:
         newCol = ComputedCol(value, key)
-
 
       self.computedCols.append(newCol)
       self.schema.append(newCol)
@@ -599,61 +477,21 @@ class DataFrame(object):
 
 
   def min(self, col=None,alias=None):
-    if isinstance(self, Grouping):
-      if col is None:
-        raise ValueError("must specify a column to aggregate!")
-
-      theCol = DataFrame._getFuncCallCol(self, col)
-      f = FuncCall(AggregateType.MIN, theCol, None, alias)
-      return self._exec_or_add_aggr(f)
-    else:
-      return self.__genTableAgg(col, AggregateType.MIN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
+    return self.__genTableAgg(col, AggregateType.MIN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
 
   def max(self, col=None, alias=None):
-    if isinstance(self, Grouping):
-      if col is None:
-        raise ValueError("must specify a column to aggregate!")
-
-      theCol = DataFrame._getFuncCallCol(self, col)
-      f = FuncCall(AggregateType.MAX, theCol, None, alias)
-      return self._exec_or_add_aggr(f)
-    else:
-      return self.__genTableAgg(col, AggregateType.MAX, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
+    return self.__genTableAgg(col, AggregateType.MAX, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.TEXT or c[1] == ColType.UNKNOWN)
 
   def mean(self, col=None,alias=None):
-    if isinstance(self, Grouping):
-      if col is None:
-        raise ValueError("must specify a column to aggregate!")
-
-      theCol = DataFrame._getFuncCallCol(self, col)
-      f = FuncCall(AggregateType.MEAN, theCol, None, alias)
-      return self._exec_or_add_aggr(f)
-    else:
-      # MEAN only over numeric columns
-      return self.__genTableAgg(col, AggregateType.MEAN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
+    # MEAN only over numeric columns
+    return self.__genTableAgg(col, AggregateType.MEAN, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
 
   def count(self, col=None, alias=None):
-    if isinstance(self, Grouping):
-      theCol = DataFrame._getFuncCallCol(self, col)
-      if theCol is None:
-        theCol = [AllColumns(self)]
-
-      f = FuncCall(AggregateType.COUNT, theCol, None, alias)
-      return self._exec_or_add_aggr(f)
-    else:
-      return self.__genTableAgg(col, AggregateType.COUNT, lambda _: True)
+    return self.__genTableAgg(col, AggregateType.COUNT, lambda _: True)
 
   def sum(self , col=None, alias = None):
-    if isinstance(self, Grouping):
-      if col is None:
-        raise ValueError("must specify a column to aggregate!")
-
-      theCol = DataFrame._getFuncCallCol(self, col)
-      f = FuncCall(AggregateType.SUM, theCol, None, alias)
-      return self._exec_or_add_aggr(f)
-    else:
-      # SUM only over numeric columns
-      return self.__genTableAgg(col, AggregateType.SUM, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
+    # SUM only over numeric columns
+    return self.__genTableAgg(col, AggregateType.SUM, lambda c: c[1] == ColType.NUMERIC or c[1] == ColType.UNKNOWN)
 
   def __genTableAgg(self, col, aggType, filterFunc):
     if not self.schema and col is None:
@@ -735,7 +573,6 @@ class DataFrame(object):
     expr = ArithmExpr(prj, Constant(n), ArithmeticOperation.SUB)
 
     return self.limit(n, expr).collect()
-    l.show(limit = n)
     
   # def __str__(self):
   #   strRep = GrizzlyGenerator.toString(self, pretty=True)
@@ -828,6 +665,126 @@ class Projection(DataFrame):
     self.columns.append(c)
     self.schema.append(c)
 
+  def distinct(self):
+    self.doDistinct = True
+    return self
+
+  def apply_torch_model(self, path: str, toTensorFunc, clazz, outputDict, clazzParameters: List, n_predictions: int = 1, *helperFuncs):
+
+    if len(outputDict) <= 0:
+      raise ValueError("output dict must not be empty")
+
+    # TODO maybe better to create a new UDF object and pass it to the code generator
+    sqlGenerator = GrizzlyGenerator._backend.queryGenerator
+
+    modelPathHash = abs(hash(path))
+    funcName = f"grizzly_predict_{modelPathHash}"
+    attrsString = "_".join([r.column for r in self.columns])
+
+    sig = inspect.signature(toTensorFunc)
+    fparams = sig.parameters
+    if len(fparams) != 1:
+      raise ValueError("toTensor converter must have exactly one parameter")
+
+    toTensorInputType = sig.parameters[list(sig.parameters)[0]].annotation.__name__
+    params = [Param("invalue", toTensorInputType), Param("n_predictions", "int")]
+    paramsStr = ",".join([f"{p.name} {sqlGenerator._mapTypes(p.type)}" for p in params])
+
+    # predictedType = type(outputDict[0]).__name__
+    predictedType = "str"  # hard coded string because we collect n predictions in a list of strings
+
+    helpers = list(helperFuncs)
+    helperCode = "\n"
+    for helperFunc in helpers:
+      (funcLines, _) = inspect.getsourcelines(helperFunc)
+      funcLines = sqlGenerator._unindent(funcLines)
+      helperCode += "".join(funcLines)
+
+    (encoderCode, _) = inspect.getsourcelines(toTensorFunc)
+    encoderCode = sqlGenerator._unindent(encoderCode)
+    encoderCode = "".join(encoderCode)
+
+    converter = lambda x: f"\"{x}\"" if type(x) == str else f"{x}"
+    outDictCode = "[" + ",".join(map(converter, outputDict)) + "]"
+
+    modelParameters = ",".join(map(converter, clazzParameters)) if clazzParameters else ""
+
+    (clazzCodeLst, _) = inspect.getsourcelines(clazz)
+    clazzCode = "".join(clazzCodeLst)
+
+    template_replacement_dict = {}
+    template_replacement_dict["$$modelpathhash$$"] = modelPathHash
+    template_replacement_dict["$$modelpath$$"] = path
+    template_replacement_dict["$$encoderfuncname$$"] = toTensorFunc.__name__
+    template_replacement_dict["$$helpers$$"] = helperCode
+    template_replacement_dict["$$encoder$$"] = encoderCode
+    template_replacement_dict["$$inputcols$$"] = paramsStr
+    template_replacement_dict["$$outputdict$$"] = outDictCode
+    template_replacement_dict["$$modelclassparameters$$"] = modelParameters
+    template_replacement_dict["$$modelclassname$$"] = clazz.__name__
+    template_replacement_dict["$$modelclassdef$$"] = clazzCode
+    udf = ModelUDF(funcName, params, predictedType, ModelType.TORCH, template_replacement_dict)
+    call = FuncCall(funcName, self.columns + [n_predictions] , udf, f"predicted_{attrsString}")
+
+    # return self.project([call])
+    return call
+
+  def apply_onnx_model(self, onnx_path, input_to_tensor, tensor_to_output):
+    funcName = "apply"
+    attrsString = "_".join([r.column for r in self.columns])
+    in_sig = inspect.signature(input_to_tensor)
+    input_names = list(in_sig.parameters.keys())
+    input_names_str = ','.join(input_names)
+    (lines1, _) = inspect.getsourcelines(input_to_tensor)
+    params = []
+    for param in in_sig.parameters:
+      type = in_sig.parameters[param].annotation.__name__
+      if (type == "_empty"):
+        raise ValueError("Input converter function must specify parameter types")
+      params.append(Param(param, type))
+
+    out_sig = inspect.signature(tensor_to_output)
+    (lines2, _) = inspect.getsourcelines(tensor_to_output)
+    returntype = out_sig.return_annotation.__name__
+    if (returntype == "_empty"):
+      raise ValueError("Output converter function must specify the return type")
+
+    template_replacement_dict = {}
+    template_replacement_dict["$$inputs$$"] = str(in_sig)
+    template_replacement_dict["$$returntype$$"] = returntype
+    template_replacement_dict["$$input_to_tensor_func$$"] = "".join(lines1)
+    template_replacement_dict["$$tensor_to_output_func$$"] = "".join(lines2)
+    template_replacement_dict["$$input_names$$"] = input_names_str
+    template_replacement_dict["$$onnx_file_path$$"] = onnx_path
+    template_replacement_dict["$$input_to_tensor_func_name$$"] = input_to_tensor.__name__
+    template_replacement_dict["$$tensor_to_output_func_name$$"] = tensor_to_output.__name__
+
+    udf = ModelUDF(funcName, params, returntype, ModelType.ONNX, template_replacement_dict)
+    call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
+
+    # return self.project([call])
+    return call
+
+  def apply_tensorflow_model(self, tf_checkpoint_file: str, network_input_names, constants=[], vocab_file: str = ""):
+    funcName = "apply"
+    attrsString = "_".join([r.column for r in self.columns])
+
+    # TODO: make this generic
+    params = [Param("a", "str")]
+    returntype = "int"
+
+    template_replacement_dict = {}
+    template_replacement_dict["$$tf_checkpoint_file$$"] = tf_checkpoint_file
+    template_replacement_dict["$$vocab_file$$"] = vocab_file
+    template_replacement_dict["$$network_input_names$$"] = f"""[{', '.join('"%s"' % n for n in network_input_names)}]"""
+    template_replacement_dict["$$constants$$"] = f"[{','.join(str(item) for item in constants)}]"
+
+    udf = ModelUDF(funcName, params, returntype, ModelType.TF, template_replacement_dict)
+    call = FuncCall(funcName, self.columns, udf, f"predicted_{attrsString}")
+
+    # return self.project([call])
+    return call
+
 
 class Filter(DataFrame):
 
@@ -916,6 +873,46 @@ class Grouping(DataFrame):
     
     
     return super().filter(expr)
+
+  def sum(self, col = None, alias = None):
+    if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.SUM, theCol, None, alias)
+    return self._exec_or_add_aggr(f)
+
+  def count(self, col = None, alias = None):
+    theCol = DataFrame._getFuncCallCol(self, col)
+    if theCol is None:
+      theCol = [AllColumns(self)]
+
+    f = FuncCall(AggregateType.COUNT, theCol, None, alias)
+    return self._exec_or_add_aggr(f)
+
+  def min(self, col = None, alias = None):
+    if col is None:
+        raise ValueError("must specify a column to aggregate!")
+
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.MIN, theCol, None, alias)
+    return self._exec_or_add_aggr(f)
+
+  def max(self, col = None, alias = None):
+    if col is None:
+      raise ValueError("must specify a column to aggregate!")
+
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.MAX, theCol, None, alias)
+    return self._exec_or_add_aggr(f)
+
+  def mean(self, col = None, alias = None):
+    if col is None:
+      raise ValueError("must specify a column to aggregate!")
+
+    theCol = DataFrame._getFuncCallCol(self, col)
+    f = FuncCall(AggregateType.MEAN, theCol, None, alias)
+    return self._exec_or_add_aggr(f)
 
 class Join(DataFrame):
   def __init__(self, parent, other, on, how, comp):
