@@ -15,8 +15,11 @@ We presented the idea as well as key concepts at several conferences:
  - Stefan Hagedorn: [**When sweet and cute isn't enough anymore: Solving scalability issues in Python Pandas with Grizzly.**](http://cidrdb.org/cidr2020/gongshow2020/gongshow/abstracts/cidr2020_abstract76.pdf), *CIDR 2020*
  - Stefan Hagedorn, Steffen Kläbe, Kai-Uwe Sattler: [**Putting Pandas in a Box**](http://cidrdb.org/cidr2021/papers/cidr2021_paper07.pdf), *CIDR 2021*
    - [Presentation on Youtube](https://www.youtube.com/watch?v=8zUszpr0300)
- - Steffen Kläbe, Stefan Hagedorn: **When Bears get Machine Support: Applying Machine Learning Models to Scalable DataFrames with Grizzly**, *BTW 2021*, **TO APPEAR**
- - Stefan Hagedorn, Steffen Kläbe, Kai-Uwe Sattler: **Conquering a Panda’s weaker self - Fighting laziness with laziness**, *EDBT 2021*, Demo Paper, **TO APPEAR**
+ - Steffen Kläbe, Stefan Hagedorn: [**When Bears get Machine Support: Applying Machine Learning Models to Scalable DataFrames with Grizzly**](https://dl.gi.de/bitstream/handle/20.500.12116/35793/A2-4.pdf), *BTW 2021*
+ - Stefan Hagedorn, Steffen Kläbe, Kai-Uwe Sattler: [**Conquering a Panda’s weaker self - Fighting laziness with laziness**](https://edbt2021proceedings.github.io/docs/p174.pdf), *EDBT 2021*, Demo Paper
+   - [Presentation on Youtube](https://www.youtube.com/embed/nBvUPlU_NOU)
+ - Steffen Kläbe, Robert DeSantis, Stefan Hagedorn, Kai-Uwe Sattler: [**Accelerating Python UDFs in Vectorized Query Execution**](http://cidrdb.org/cidr2022/papers/p33-klaebe.pdf), *CIDR 2022*
+   - [Presentation on Youtube](https://www.youtube.com/watch?v=FLatSmSGkk8)
 
 
 ## Installation
