@@ -1,4 +1,3 @@
-from ast import alias
 from grizzly.dataframes.schema import ColType, SchemaError
 from grizzly.expression import ExpressionException
 import unittest
