@@ -1235,6 +1235,85 @@ return apply(input)
 
     self.matchSnipped(actual, expected, removeLinebreaks=True)
 
+  def test_containsTuple1(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[df.actor1name]
+
+    exists = ("AUSTRALIAN",) in df
+
+    self.assertTrue(exists)
+
+  def test_containsTuple2(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[[df.actor1name, df.globaleventid]]
+
+    exists = ("AUSTRALIAN",467300756) in df
+
+    self.assertTrue(exists)
+
+  def test_containsTuple3(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[[df.actor1name, df.globaleventid,df.actiongeo_long]]
+
+    exists = ("AUSTRALIAN",467300756,101.7) in df
+
+    self.assertTrue(exists)
+
+  def test_containsTupleAll(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+
+    exists = (467300756,"AUSTRALIAN","AUS",101.7) in df
+
+    self.assertTrue(exists)
+
+  def test_containsTupleAll(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+
+    exists = (467300756,"AUSTRALIAN1","AUS",101.7) in df
+
+    self.assertFalse(exists)
+
+  def test_containsTooFewCols(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+
+    self.assertRaises(ValueError, lambda: (467300756,"AUSTRALIAN","AUS") in df)
+
+  def test_containsTooManyCols(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+
+    self.assertRaises(ValueError, lambda: (467300756,"AUSTRALIAN","AUS",1,2) in df)
+
+  def test_containsNoSchema(self):
+    df = grizzly.read_table("t3")
+
+    self.assertRaises(SchemaError, lambda: (467300756,"AUSTRALIAN","AUS",100.7) in df)
+
+  def test_containsSingleInt(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[df.globaleventid]
+
+    exists = 467300756 in df
+    self.assertTrue(exists)
+
+  def test_containsSingleStr(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[df.actor1name]
+
+    exists = "AUSTRALIAN" in df
+    self.assertTrue(exists)
+
+  def test_containsTypeMismatch(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = df[df.actor1name]
+
+    self.assertRaises(TypeError, lambda: 4 in df)
+
+  def test_containsDirectProjection(self):
+    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+
+    exists = 467300756 in df[df.globaleventid]
+    self.assertTrue(exists)
+
 if __name__ == "__main__":
     unittest.main()
 

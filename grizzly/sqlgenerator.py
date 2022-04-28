@@ -72,6 +72,7 @@ class SQLGenerator:
 
     elif isinstance(expr,str):
       raise ValueError(f"string is not an expresion! {expr}")
+      
       # exprSQL = expr # TODO: currently to handle *, but maybe this should done earlier and be converted into a special ColRef?
     
     # we were given a constant
@@ -224,6 +225,18 @@ class SQLGenerator:
 
       (pre,exprSQL) = self._generateFuncCall(expr)
       
+    elif isinstance(expr, tuple) or isinstance(expr, list):
+      sqls = []
+      for i in expr:
+        (exprPre,sql) = self._exprToSQL(i)
+        pre  += exprPre
+        sqls.append(sql)
+
+      sqls = "(" + ",".join([str(s) for s in sqls]) + ")"
+
+      exprSQL = sqls  
+
+
     # seems to be something we forgot above or unknown to us. raise an exception  
     else:
       raise ExpressionException(f"don't know how to handle {expr}")

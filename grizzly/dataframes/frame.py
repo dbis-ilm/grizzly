@@ -60,11 +60,15 @@ class DataFrame(object):
       ref = ColRef(x, self)                                                                                             
       return ref   
     elif isinstance(x, BinaryExpression):
-      if x.left:                                                                                           
-        x.left = self._updateRef(x.left) if isinstance(x.left, Expr) else x.left                                           
-      if x.right:
-        x.right = self._updateRef(x.right) if isinstance(x.right, Expr) else x.right
+      if x.left: #and isinstance(x.left, Expr):
+          x.left = self._updateRef(x.left) 
+
+      if x.right: # and isinstance(x.right, Expr):
+          x.right = self._updateRef(x.right)
+
       return x
+    elif isinstance(x, list) or isinstance(x, tuple):
+      return [self._updateRef(y) for y in x]
     else:
       return x
 
@@ -100,7 +104,7 @@ class DataFrame(object):
         raise ExpressionException(f"No such column {on[0]} for join in left hand side")
       else:
         lOn = ColRef(on[0], self)
-      if not other.hasColumn(on[1]):
+      if not other._hasColumn(on[1]):
         raise ExpressionException(f"No such column {on[1]} for join in right hand side. Has cols: {other.schema}")
       else:
         rOn = ColRef(on[1], other)
@@ -163,8 +167,8 @@ class DataFrame(object):
         p = Param(fp,fptype)
         params.append(p)
 
-      if lines == []:
-        (lines,_) = inspect.getsourcelines(func)
+      # if lines == []:
+      (lines,_) = inspect.getsourcelines(func)
 
       returns = sig.return_annotation.__name__
 
@@ -182,6 +186,45 @@ class DataFrame(object):
 
   ###################################
   # iteration
+
+  def __contains__(self, item):
+    '''
+    Implementation of 'in' operator: check if a value/tuple exists in the dataframe
+
+    :param item: value to check If it is a tuple, it is checked if it exists in the dataframe. 
+                                If it is a single string, it is checked if it is a column name.
+    :return: True if the value exists in the dataframe, False otherwise
+
+    '''
+
+    if not self.schema:
+      raise SchemaError("Cannot check if tuple exists in dataframe without schema")
+
+    if not isinstance(item, tuple) and not isinstance(item, list):
+      item = [item]
+
+    if len(item) != len(self.schema):
+      raise ValueError(f"Tuple must have same length as schema: tuple has {len(item)} columns, schema has {len(self.schema)} columns")
+
+
+    constants = [Constant(x) for x in item]
+    cols = self.schema.columns(df = self)
+
+    for(c,x) in zip(cols, constants):
+      if not self.schema.checkType(c,x):
+        raise TypeError(f"Type mismatch: type of column {c} does not match type of value {x} ({type(x)})")
+
+    expr = BoolExpr(cols,  constants, BooleanOperation.EQ)
+    
+    f = self.filter(expr)
+
+    i = GrizzlyGenerator.iterator(f, includeHeader=False)
+
+    try:
+      i.__next__()
+      return True
+    except StopIteration:
+      return False
 
   def __iter__(self):
     return GrizzlyGenerator.iterator(self)
