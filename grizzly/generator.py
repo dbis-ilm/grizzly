@@ -8,7 +8,7 @@ class GrizzlyGenerator(object):
 
   @staticmethod
   def _incrAndGetTupleVar():
-    tVar = f"_t{GrizzlyGenerator.tVarCounter}"
+    tVar = f"t{GrizzlyGenerator.tVarCounter}"
     GrizzlyGenerator.tVarCounter += 1
     return tVar
 
