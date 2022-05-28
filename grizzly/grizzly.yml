@@ -1,6 +1,24 @@
+oracle:
+  int: INTEGER(12)
+  str: VARCHAR2(12)
+  float: FLOAT(12)
+  bool: BOOLEAN
+  print: set serveroutput on; / dbms_output.put_line($$code$$);
+  cursor: CURSOR $$var$$ IS $$qry$$
+  createfunction_sql: $$pre$$ CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN $$returntype$$ IS $$code$$
+  ZeroDivisionError: Zero_Divide
+
 postgresql:
   limit: limit
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
+  int: INTEGER
+  str: VARCHAR
+  float: FLOAT8
+  bool: BOOLEAN
+  print_str: raise notice '$$code$$';
+  print_var: raise notice '%', $$code$$;
+  cursor: $$var$$ CURSOR FOR $$qry$$
+  createfunction_py: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ AS $$ // $$code$$$$ LANGUAGE plpython3u;
+  createfunction_sql: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ AS $$ DECLARE $$code$$ $$ LANGUAGE plpgsql;
   externaltable: 
     - CREATE SERVER IF NOT EXISTS import FOREIGN DATA WRAPPER $$fdw_extension_name$$
     - DROP FOREIGN TABLE IF EXISTS $$name$$
@@ -63,7 +81,7 @@ sqlite:
 
 monetdb:
   limit: limit
-  createfunction: | 
+  createfunction_py: | 
     CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) 
     RETURNS $$returntype$$ 
     LANGUAGE python { 
@@ -92,7 +110,7 @@ monetdb:
 
 vector:
   limit: top
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
+  createfunction_py: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
   externaltable: 
     - DROP TABLE IF EXISTS $$name$$
     - CREATE EXTERNAL TABLE $$name$$($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$', FORMAT='$$format$$' $$vectoroptions$$
