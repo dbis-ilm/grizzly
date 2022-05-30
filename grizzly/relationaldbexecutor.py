@@ -1,6 +1,5 @@
 from grizzly.generator import GrizzlyGenerator
 from grizzly.sqlgenerator import SQLGenerator
-from grizzly.udfcompiler.udfcompiler_exceptions import UDFCompilerException
 # Imports needed for getting the db vendor
 import sqlite3
 import cx_Oracle
@@ -166,6 +165,12 @@ class RelationalExecutor(object):
 
       return "\n".join(resultRep)
 
+  def to_df(self, df):
+    (pre, qry) = self.queryGenerator.generate(df)
+    import pandas
+    p_df = pandas.read_sql(qry, self.connection)
+    return p_df
+
   def execute(self, df):
     """
     Execute the operations and print results to stdout
@@ -175,11 +180,7 @@ class RelationalExecutor(object):
     Non-pretty mode outputs in CSV style -- the delim parameter can be used to 
     set the delimiter. Non-pretty mode ignores the maxColWidth parameter.
     """
-    try:
-      (pre,sql) = self.queryGenerator.generate(df)
-    except UDFCompilerException as e:
-      # Catch compilererror and add connection for pandas fallback
-      raise UDFCompilerException('Error while generating UDF', e, funccall=e.funccall, con=self.connection)
+    (pre,sql) = self.queryGenerator.generate(df)
     for pq in pre:
       # print(pq)
       self._execute(pq).close()

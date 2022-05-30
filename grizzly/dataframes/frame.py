@@ -643,15 +643,24 @@ class DataFrame(object):
       print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
     except UDFCompilerException as e:
       # Fallback to applying udf local with pandas
-      funccall = e.funccall
-      if funccall.udf.fallback == False:
+      if e.funccall.udf.fallback == False:
         raise
-      inputcols = ", ".join(str(col.column).upper() for col in funccall.inputCols)
-      # Get data for applying udf
-      import pandas
-      df = pandas.read_sql(f"SELECT {inputcols} FROM {self.parents[0].table}", e.con)
-      df[funccall.alias] = df[inputcols].apply(funccall.udf.func)
-      print(df)
+      else:
+        print(self._fallback(e))
+    
+  def _fallback(self, e):
+    funccall = e.funccall
+    inputcols = ", ".join(str(col.column).upper() for col in funccall.inputCols)
+    # Get data for applying udf
+    table = self
+    
+    # get last table (before funccall)
+    table = table.parents[0]
+
+    # TODO handle multiple parameters (not possible with df)
+    p_df = GrizzlyGenerator.to_df(table)
+    p_df[funccall.alias] = p_df[inputcols].apply(funccall.udf.func)
+    return p_df
 
   def first(self):
     tup = GrizzlyGenerator.fetchone(self)
