@@ -508,7 +508,7 @@ class SQLGenerator:
             except ValueError:
               logging.debug('Fallback to PL/Python failed')
               # Raise exception to make Fallback with pandas possible
-              raise UDFCompilerException(f'Compiling of "{udf.name}" to "{udf.lang}" failed:', e)
+              raise UDFCompilerException(f'Compiling of UDF "{udf.name}" to "{udf.lang}" failed', e)
           else:
             raise
 
@@ -517,7 +517,8 @@ class SQLGenerator:
       .replace("$$pre$$", pre)\
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\
-      .replace("$$code$$",lines)
+      .replace("$$code$$",lines)\
+      .replace("//", "\n")
     return code
 
   @staticmethod
