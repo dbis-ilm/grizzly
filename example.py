@@ -3,7 +3,7 @@ import sqlite3
 import cx_Oracle
 import psycopg2
 from grizzly.relationaldbexecutor import RelationalExecutor
-from grizzly.udfcompiler import test_functions
+from grizzly.udfcompiler import test_udfs
 
 con = sqlite3.connect("grizzly.db")
 
@@ -44,7 +44,7 @@ a.show()
 print("----------------------------------------")
 # Example for UDF compiling
 # Define function to be translated and connection (Oracle and PostgreSQL supported)
-func = test_functions.udf_embedded_loops
+func = test_udfs.udf_embedded_loops
 con = cx_Oracle.connect()
 con2 = psycopg2.connect()
 
