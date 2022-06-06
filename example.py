@@ -43,8 +43,9 @@ a.show()
 
 print("----------------------------------------")
 # Example for UDF compiling
-# Define function to be translated and connection (Oracle and PostgreSQL supported)
-func = test_udfs.udf_embedded_loops
+# Define function to be translated
+func = test_udfs.lists
+# Add your connection (PostgreSQL and Oracle supported)
 con = cx_Oracle.connect()
 con2 = psycopg2.connect()
 
@@ -55,8 +56,8 @@ df = df[df['test_id'] < 30]
 df = df[["test_id", "test_text", "test_float", "test_number"]]
 
 # Apply Function to grizzly dataframe as new Column "udf"
-df["udf"] = df[["test_number"]].map(func, 'sql', fallback=True)
+df["udf"] = df[["test_number"]].map(func, lang='sql', fallback=True)
 
-# Print translated executed query
+# Print translated and executed query
 print(df.generateQuery())
 df.show()
