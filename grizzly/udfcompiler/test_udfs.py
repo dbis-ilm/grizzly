@@ -22,7 +22,6 @@ def udf_exceptions(a: int) -> str:
     except:
         return 'general exception'
 
-# Test functions
 def repeat(a: int, b: str) -> str:
     return a * b
 
@@ -55,7 +54,6 @@ def lists(a: int) -> str:
     bool_list = [True, False]
     float_lst = [1.2, 4.6]
     str_lst[0] = 'changed'
-    k = 2 & 5
     m = int_lst[1]
     b = bool_list[0]
     for i in int_lst:
@@ -64,7 +62,6 @@ def lists(a: int) -> str:
 
 def while_loop(a: int, b: float) -> int:
     i = 0
-    l = [1]
     while i+b < a:
         i = i + a
     return i
