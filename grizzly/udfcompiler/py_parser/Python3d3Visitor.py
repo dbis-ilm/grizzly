@@ -43,9 +43,11 @@ class Python3d3Visitor(ParseTreeVisitor):
         _var = ""
         _qry = ""
         for i, line in enumerate(to_eval):
+            # check whether statement is saved in a variable or executed directly
             if "=" in line:
                 exec(line)
                 _var = line.split("=")[0].replace(" ", "")
+                # check if statement is last from list
                 if i == len(to_eval)-1:
                     _qry = eval(_var + '.generateQuery()')
             elif ".use" in line:
@@ -55,6 +57,7 @@ class Python3d3Visitor(ParseTreeVisitor):
         return _qry, _var
 
     def datatype_without_brackets(self, type):
+        # Remove paranthesis from datatype
         import re
         remove_brackets_expr = "[\(].*?[\)]"
         removed_brackets_type = re.sub(remove_brackets_expr, "", type)
@@ -62,6 +65,7 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3Parser#file_input.
     def visitFile_input(self, ctx: Python3d3Parser.File_inputContext):
+        # First rule of syntax tree
         self.statements.append("BEGIN")
         self.visitChildren(ctx)
         self.statements.append("END;")
@@ -73,7 +77,6 @@ class Python3d3Visitor(ParseTreeVisitor):
     # Visit a parse tree produced by Python3d3Parser#exception_stmt.
     def visitException_stmt(self, ctx:Python3d3Parser.Exception_stmtContext):
         self.contains_stmts['exception'] = True
-        # TODO Handle else, finally
         self.statements.append('BEGIN')
         self.visitChildren(ctx.suite()[0])
         self.statements.append('EXCEPTION')
@@ -114,7 +117,7 @@ class Python3d3Visitor(ParseTreeVisitor):
             # Add excpetion declaration
             self.exceptions.append(f'{exception_name} EXCEPTION;')
             self.statements.append(f'RAISE {exception_name};')
-            
+        # Add custom error type as message in postgresql
         elif self.templates.profile == 'postgresql':
             self.statements.append(f"RAISE EXCEPTION '{exception_name}';")
         else:
@@ -134,24 +137,27 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#initialization.
     def visitInitialization(self, ctx:Python3d3Parser.InitializationContext):
+        # Function to visit initialiszation with datatype
         # i: int = 0
         self.assignments[ctx.NAME().getText()] = self.templates[ctx.typ().getText()]
         self.statements.append(f"{ctx.NAME().getText()} := {self.visitChildren(ctx)};")
 
     # Visit a parse tree produced by Python3d3Parser#declaration.
     def visitDeclaration(self, ctx:Python3d3Parser.DeclarationContext):
+        # Function to visit declaration of variable with datatype
         # i: int
         self.assignments[ctx.NAME().getText()] = self.templates[ctx.typ().getText()]
         return self.visitChildren(ctx)
 
     # Visit a parse tree produced by Python3d3Parser#nontype_initialization.
     def visitNontype_initialization(self, ctx:Python3d3Parser.Nontype_initializationContext):
+        # Function to visit initialization without a datatype
         # i = 0 / i = False etc.
         # i = 3 / g_df1 = grizzly.read('table')
+        # If initialization is for a grizzly statement
         if ctx.GRZLYNAME():
             self.to_eval.append(ctx.getText())
             return
-            #return self.visitChildren(ctx)
 
         # If assignment isn't an grizzly statement
         assignment = self.visit(ctx.expr())
@@ -167,19 +173,23 @@ class Python3d3Visitor(ParseTreeVisitor):
             # If the expression is a string
             elif declr_expr.STRING():
                 var_type = self.templates['str']
-            # If expression is a number check whether its a float or not
+            # If expression is a number try to load mapped datatype
             elif declr_expr.NUMBER():
                 var_type = self.templates['int']
+            # If expression is a float try to load mapped datatype
             elif declr_expr.FLOAT():
                 var_type = self.templates['float']
+            # If expression is a bool try to load mapped datatype
             elif declr_expr.BOOL():
                 var_type = self.templates['bool']
+            # If expression is a list try to load mapped datatype
             elif declr_expr.list_expr():
                 list_expr = declr_expr.list_expr()
                 var_type = self.templates['list']
                 if list_expr.elems():
                     list_elems = list_expr.elems()
                     first_elem = list_elems.elem()[0]
+                    # init list with first element datatype
                     if first_elem.NUMBER():
                         var_type = var_type.replace('$$datatype$$', self.templates['int'])
                     elif first_elem.STRING():
@@ -209,6 +219,8 @@ class Python3d3Visitor(ParseTreeVisitor):
                 list_type = self.assignments[list_var]
                 var_type = list_type[:list_type.rfind('[')]
                 #assignment = self.visit(declr_expr.list_dec())
+            
+            # If datatype could not be found
             else:
                 raise TypeError(f'Please define a type for "{assignment}" expression in your UDF')
                 var_type = '<UNDEFINED>'
@@ -220,7 +232,9 @@ class Python3d3Visitor(ParseTreeVisitor):
         else:
             self.statements.append(f"{var} := {assignment};")
 
+    # Visit a parse tree produced by Python3d3Parser#Lst_assignment.
     def visitLst_assignment(self, ctx: Python3d3Parser.Lst_assignmentContext):
+        # Function to generate list assignment statements
         index = int(ctx.NUMBER().getText()) + 1
         self.statements.append(f'{ctx.NAME()}[{index}] := {self.visit(ctx.expr())};')
 
@@ -241,7 +255,6 @@ class Python3d3Visitor(ParseTreeVisitor):
         #returns = ctx.expr().getText().replace('"',"'")
         returns = self.visitChildren(ctx)
         self.statements.append(f"RETURN {returns};")
-
 
     # Visit a parse tree produced by Python3d3Parser#except_stmt.
     def visitExcept_stmt(self, ctx:Python3d3Parser.Except_stmtContext):
@@ -275,8 +288,11 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#while_stmt.
     def visitWhile_stmt(self, ctx: Python3d3Parser.While_stmtContext):
+        # Function to visit while statement in syntaxtree
         self.contains_stmts['iterative'] = True
+        # Get test statement
         test = self.visit(ctx.ob_test())
+        # Check if while loop is a while True loop
         if test != 'True':
             self.statements.append(f'WHILE {test}')
         self.statements.append('LOOP')
@@ -329,12 +345,14 @@ class Python3d3Visitor(ParseTreeVisitor):
     def visitSuite(self, ctx: Python3d3Parser.SuiteContext):
         return self.visitChildren(ctx)
 
+    # Visit a parse tree produced by Python3d3Parser#Ob_test.
     def visitOb_test(self, ctx:Python3d3Parser.Ob_testContext):
+        # Function to visit test statements concatenated with logigal operators
         tests = []
         if len(ctx.test()) == 1:
             return self.visit(ctx.test()[0])
         else:
-            for i, op in enumerate(ctx.log_op()):
+            for _, op in enumerate(ctx.log_op()):
                 l = self.visit(ctx.test()[0])
                 r = self.visit(ctx.test()[1])
                 log_op = self.visit(op)
@@ -343,6 +361,7 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#test.
     def visitTest(self, ctx:Python3d3Parser.TestContext):
+        # Function to visit test statmenets with comparasion operators
         tsts = []
         if len(ctx.comp_op()) == 0:
             return self.visit(ctx.expr()[0])
@@ -358,15 +377,17 @@ class Python3d3Visitor(ParseTreeVisitor):
     # Visit a parse tree produced by Python3d3Parser#print_stmt.
     def visitPrint_stmt(self, ctx: Python3d3Parser.Print_stmtContext):
         self.contains_stmts['print'] = True
+        # special streatment for oracle and postgresql DBMS
         if self.templates.profile == 'postgresql':
+            # Check whether printed statement contains variables or just a string
             if ctx.expr().STRING():
                 template = self.templates['print_str']
-            # TODO cases for row.attr references
             else:
                 template = self.templates['print_var']
         else:
             template = self.templates['print']
         
+        # Add pre sql for enabling serveroutpur on oracle DBMS
         if '/' in template:
             self.pre.append(template.split('/')[0])
             self.statements.append(template.split('/')[1].replace('$$code$$', self.visit(ctx.expr())))
@@ -377,31 +398,38 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#range.
     def visitRang(self, ctx: Python3d3Parser.RangContext):
+        # Function to visit range statements
         if len(ctx.expr()) == 2:
+            # If a special range between two expressions is defined
             l = self.visit(ctx.expr()[0])
             r = self.visit(ctx.expr()[1])
             if r in self.assignments:
                 r = f'{r} - 1'
             for_loop = f"{str(l)}..{str(r)}"
         else:
+            # If only the upper limit of range statement is defined (range(3))
             for_loop = f"0..{str(self.visit(ctx.expr()[0]))}-1"
         return for_loop
 
-    # Visit a parse tree produced by Python3d3Parser#comprehension.
+    # Visit a parse tree produced by Python3d3Parser#comp_op.
     def visitComp_op(self, ctx: Python3d3Parser.Comp_opContext):
+        # Function to visit comparison operators
         comp_op = ctx.getText()
         if comp_op == '==':
             comp_op = '='
         return comp_op
     
     def visitLog_op(self, ctx: Python3d3Parser.Log_opContext):
+        # Function to visit logical operators
         return ctx.getText()
 
     # Visit a parse tree produced by Python3d3Parser#expr.
     def visitExpr(self, ctx: Python3d3Parser.ExprContext):
+        # Function to visit expressions
         if ctx.NAME() or ctx.STRING() or ctx.NUMBER() or ctx.FLOAT() or ctx.BOOL() or ctx.list_expr():
             return ctx.getText().replace('"', "'")
         
+        # If expression contains an operation
         if ctx.calc_op():
             # Get left and right side of equasion
             l = ctx.expr()[0]
@@ -440,17 +468,17 @@ class Python3d3Visitor(ParseTreeVisitor):
             
             return f'{l} {calc_op} {r}'
 
+        # Add parenthesis if needed
         if ctx.parenthesis_expr():
             return f'({self.visit(ctx.parenthesis_expr().expr())})'
-
-        #if ctx.db_reference():
-            #return f'{ctx.db_reference().NAME()[0]}.{ctx.db_reference().NAME()[1]}'
         
         return self.visitChildren(ctx)
-        #return str(ctx.getText().replace('"', "'").replace('==', '='))
 
+    # Visit a parse tree produced by Python3d3Parser#Calc_op.
     def visitCalc_op(self, ctx:Python3d3Parser.Calc_opContext):
+        # Function to visit calculation operator
         calc_op = ctx.getText()
+        # special operators fpr postgresql DB
         if self.templates.profile == 'postgresql':
             if calc_op == '**':
                 calc_op = '^'
@@ -472,7 +500,7 @@ class Python3d3Visitor(ParseTreeVisitor):
         try:
             funccall = self.templates[str(funcname)]
             funccall = funccall.replace('$$params$$', params)
-        except ValueError as e:
+        except ValueError:
             # If function is not mapped, just get whole funccall
             funccall = ctx.getText()
         return funccall
@@ -483,13 +511,16 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#typecast.
     def visitTypecast(self, ctx:Python3d3Parser.TypecastContext):
+        # Function to visit typecast
         var_type_sql = self.templates[ctx.typ().getText()]
         if self.templates.profile == 'oracle':
             var_type_sql = self.datatype_without_brackets(var_type_sql)
 
         return f'CAST({self.visit(ctx.expr())} AS {var_type_sql})'
 
+    # Visit a parse tree produced by Python3d3Parser#List_dec.
     def visitList_dec(self, ctx:Python3d3Parser.List_decContext):
+        # Function to visit list operations
         list_decl = ctx
         list_var = list_decl.NAME().getText()
         list_type = self.assignments[list_var]
@@ -500,8 +531,8 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#db_reference.
     def visitDb_reference(self, ctx:Python3d3Parser.Db_referenceContext):
+        # Function to visit db-reference
         self.contains_stmts['db_reference'] = True
         return f'{ctx.NAME()[0]}.{ctx.NAME()[1]}'
-        return self.visitChildren(ctx)
 
 del Python3d3Parser
