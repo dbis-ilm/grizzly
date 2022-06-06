@@ -14,9 +14,11 @@ postgresql:
   str: VARCHAR
   float: FLOAT8
   bool: BOOLEAN
+  list: $$datatype$$[]
   print_str: raise notice '$$code$$';
   print_var: raise notice '%', $$code$$;
   cursor: $$var$$ CURSOR FOR $$qry$$
+  ZeroDivisionError: division_by_zero
   createfunction_py: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ AS $$ // $$code$$$$ LANGUAGE plpython3u;
   createfunction_sql: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ AS $$ DECLARE $$code$$ $$ LANGUAGE plpgsql;
   externaltable: 
