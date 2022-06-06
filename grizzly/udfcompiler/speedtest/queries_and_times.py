@@ -94,7 +94,7 @@ class udf_basic:
         END;
     """
     
-    # Number of executed tupels (inserted into db before execution), Method of execution, execution time in seconds
+    # Number of executed tupel (inserted into db before execution), Method of execution, execution time in seconds
     udf_basic_times = [
     [10000,  'SQL' ,0.02],  [100000,  'SQL' , 0.141],  [1_000_000,  'SQL', 1.355],  [5000000, 'SQL', 7.050],
     [10000, 'PL/pgSQL', 0.064],  [100000, 'PL/pgSQL', 0.232],  [1_000_000, 'PL/pgSQL', 1.978],  [5000000, 'PL/pgSQL', 9.868],
@@ -362,7 +362,7 @@ class IsPrime:
         END;
     """
 
-    # Number of executed tupels (inserted into db before execution), Method of execution, execution time in seconds
+    # Number of executed tupel (inserted into db before execution), Method of execution, execution time in seconds
     udf_isprime_times = [
     [10000, 'PL/Python', 0.137],  [100000, 'PL/Python', 0.402],  [1_000_000, 'PL/Python', 3.566],  [5000000, 'PL/Python', 18,348],
     [10000, 'PL/pgSQL', 0.145],  [100000, 'PL/pgSQL', 0.355],  [1_000_000, 'PL/pgSQL', 2.512],  [5000000, 'PL/pgSQL', 12.723],
@@ -376,7 +376,7 @@ class IsPrime:
 
 import grizzly
 class cursor_loop:
-    # Function to iterate over 10 tupels of table speedtest in UDF
+    # Function to iterate over 10 tupel of table speedtest in UDF
     def cursor_loop(a: int) -> int:
         g_df1 = grizzly.read_table("speedtest")
         g_df1 = g_df1[g_df1.test_id < 10] 
@@ -513,7 +513,7 @@ class cursor_loop:
                 f = f-1
         return f
 
-    # Number of executed tupels (inserted into db before execution), Method of execution, execution time in seconds
+    # Number of executed tupel (inserted into db before execution), Method of execution, execution time in seconds
     udf_cursor_loop_times = [ 
     [1000, 'PL/Python', 0.179],  [10000, 'PL/Python', 5.737],  [50000, 'PL/Python', 121.51],
     [1000, 'PL/pgSQL', 0.169],  [10000, 'PL/pgSQL', 5.174],  [50000, 'PL/pgSQL', 119.843],
