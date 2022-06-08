@@ -312,7 +312,7 @@ class DataFrame(object):
 
       n = key.stop
 
-      offset = key.start if key.start is not None else None
+      offset = key.start # if key.start is not None else None
       return self.limit(n, offset)
 
     elif theType is ColRef : # if in the projection list e.g. "df.a" was given
