@@ -19,13 +19,14 @@ class Python3d3Visitor(ParseTreeVisitor):
     def __init__(self, templates, params):
         self.params = params
         self.templates = templates
+        # Lists to collect translated statements
         self.pre = []
         self.statements = []
         self.assignments = {}
         self.cursor = []
         self.exceptions = []
         self.to_eval = []
-        # List containing spedific elemnts of code to check whether it can be compiled to plain sql easily
+        # List containing specific elements of code to check whether it can be compiled to plain sql easily
         self.contains_stmts =   {'if-stmt': False,
                                 'iterative': False,
                                 'exception': False,
@@ -40,35 +41,35 @@ class Python3d3Visitor(ParseTreeVisitor):
     @staticmethod
     def evaluate(to_eval):
         # Function to evaluate Grizzly statements into SQL Statements
-        _var = ""
-        _qry = ""
+        _var = ''
+        _qry = ''
         for i, line in enumerate(to_eval):
-            # check whether statement is saved in a variable or executed directly
-            if "=" in line:
+            # Check whether statement is saved in a variable or executed directly
+            if '=' in line:
                 exec(line)
-                _var = line.split("=")[0].replace(" ", "")
-                # check if statement is last from list
+                _var = line.split('=')[0].replace(' ', '')
+                # Check if statement is last from list
                 if i == len(to_eval)-1:
                     _qry = eval(_var + '.generateQuery()')
-            elif ".use" in line:
+            elif '.use' in line:
                 exec(line)
             else:
                 _qry = eval(line)
         return _qry, _var
 
     def datatype_without_brackets(self, type):
-        # Remove paranthesis from datatype
+        # Remove parenthesis from datatype
         import re
-        remove_brackets_expr = "[\(].*?[\)]"
-        removed_brackets_type = re.sub(remove_brackets_expr, "", type)
+        remove_brackets_expr = '[\(].*?[\)]'
+        removed_brackets_type = re.sub(remove_brackets_expr, '', type)
         return removed_brackets_type
 
     # Visit a parse tree produced by Python3Parser#file_input.
     def visitFile_input(self, ctx: Python3d3Parser.File_inputContext):
         # First rule of syntax tree
-        self.statements.append("BEGIN")
+        self.statements.append('BEGIN')
         self.visitChildren(ctx)
-        self.statements.append("END;")
+        self.statements.append('END;')
 
     # Visit a parse tree produced by Python3d3Parser#stmt.
     def visitStmt(self, ctx: Python3d3Parser.StmtContext):
@@ -94,25 +95,23 @@ class Python3d3Visitor(ParseTreeVisitor):
                 try:
                     exception_text = self.templates[exception_text]
                 except ValueError:
-                    # Only allow mapped exceptions in postgres (definied not supported)
+                    # Only allow mapped exceptions in postgresql (self-defined not supported)
                     if self.templates.profile == 'postgresql':
                         exception_text = 'OTHERS'
 
-                        
                 self.statements.append('WHEN ' + exception_text + ' THEN')
-
             # If no exception type is defined, grab all
             else:
                 self.statements.append('WHEN OTHERS THEN')
-            
             # Visit code in exception clause
             self.visitChildren(ctx.suite()[i+1])
+
         self.statements.append('END;')
 
     # Visit a parse tree produced by Python3d3Parser#raise_stmt.
     def visitRaise_stmt(self, ctx:Python3d3Parser.Raise_stmtContext):
         exception_name = ctx.NAME() if ctx.NAME() else 'def'
-        # Only add custom exceptions if db supports it
+        # Only add custom exceptions if dbms supports it
         if self.templates.profile == 'oracle':
             # Add excpetion declaration
             self.exceptions.append(f'{exception_name} EXCEPTION;')
@@ -137,10 +136,10 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#initialization.
     def visitInitialization(self, ctx:Python3d3Parser.InitializationContext):
-        # Function to visit initialiszation with datatype
+        # Function to visit initialization with datatype
         # i: int = 0
         self.assignments[ctx.NAME().getText()] = self.templates[ctx.typ().getText()]
-        self.statements.append(f"{ctx.NAME().getText()} := {self.visitChildren(ctx)};")
+        self.statements.append(f'{ctx.NAME().getText()} := {self.visitChildren(ctx)};')
 
     # Visit a parse tree produced by Python3d3Parser#declaration.
     def visitDeclaration(self, ctx:Python3d3Parser.DeclarationContext):
@@ -154,6 +153,7 @@ class Python3d3Visitor(ParseTreeVisitor):
         # Function to visit initialization without a datatype
         # i = 0 / i = False etc.
         # i = 3 / g_df1 = grizzly.read('table')
+
         # If initialization is for a grizzly statement
         if ctx.GRZLYNAME():
             self.to_eval.append(ctx.getText())
@@ -228,13 +228,13 @@ class Python3d3Visitor(ParseTreeVisitor):
             self.assignments[var] = var_type
         
         if ctx.expr().list_expr():
-            self.statements.append(f"{var} := array{assignment};")
+            self.statements.append(f'{var} := array{assignment};')
         else:
-            self.statements.append(f"{var} := {assignment};")
+            self.statements.append(f'{var} := {assignment};')
 
     # Visit a parse tree produced by Python3d3Parser#Lst_assignment.
     def visitLst_assignment(self, ctx: Python3d3Parser.Lst_assignmentContext):
-        # Function to generate list assignment statements
+        # Function to generate list assignment statement
         index = int(ctx.NUMBER().getText()) + 1
         self.statements.append(f'{ctx.NAME()}[{index}] := {self.visit(ctx.expr())};')
 
@@ -254,7 +254,7 @@ class Python3d3Visitor(ParseTreeVisitor):
     def visitReturn_stmt(self, ctx: Python3d3Parser.Return_stmtContext):
         #returns = ctx.expr().getText().replace('"',"'")
         returns = self.visitChildren(ctx)
-        self.statements.append(f"RETURN {returns};")
+        self.statements.append(f'RETURN {returns};')
 
     # Visit a parse tree produced by Python3d3Parser#except_stmt.
     def visitExcept_stmt(self, ctx:Python3d3Parser.Except_stmtContext):
@@ -267,24 +267,23 @@ class Python3d3Visitor(ParseTreeVisitor):
     # Visit a parse tree produced by Python3d3Parser#if_stmt.
     def visitIf_stmt(self, ctx: Python3d3Parser.If_stmtContext):
         self.contains_stmts['if_stmt'] = True
-        # counter to keep track of if and elifs
+        # Counter to keep track of if and elifs
         test_counter = 0
-        # TODO simplify
         # Iterate through all tests and suites
         for i, suite in enumerate(ctx.suite()):
             if i == 0:
                 test = self.visit(ctx.ob_test()[test_counter])
-                self.statements.append(f"IF {test} THEN")
+                self.statements.append(f'IF {test} THEN')
                 test_counter += 1
-            elif i == len(ctx.suite())-1 and "else" in ctx.getText():
-                self.statements.append(f"ELSE")
-            elif "elif" in ctx.getText():
+            elif i == len(ctx.suite())-1 and 'else' in ctx.getText():
+                self.statements.append(f'ELSE')
+            elif 'elif' in ctx.getText():
                 test = self.visit(ctx.ob_test()[test_counter])
-                self.statements.append(f"ELSIF {test} THEN")
+                self.statements.append(f'ELSIF {test} THEN')
                 test_counter += 1
             self.visitChildren(suite)
         
-        self.statements.append("END IF;")
+        self.statements.append('END IF;')
 
     # Visit a parse tree produced by Python3d3Parser#while_stmt.
     def visitWhile_stmt(self, ctx: Python3d3Parser.While_stmtContext):
@@ -302,30 +301,34 @@ class Python3d3Visitor(ParseTreeVisitor):
     # Visit a parse tree produced by Python3d3Parser#for_stmt.
     def visitFor_stmt(self, ctx: Python3d3Parser.For_stmtContext):
         self.contains_stmts['iterative'] = True
-        # TODO for item in list:
 
         # Get iteration variable
-        iteration_var = ctx.NAME()
-        # Check if variable for iterating exists
-        if iteration_var not in (item for temp_list in self.assignments for item in temp_list[0]) and not ctx.GRZLYNAME():
+        iteration_var = ctx.NAME().getText()
+
+        # Check if variable for iterating exists or if iteration var is a cursor
+        temp_list = []
+        for assignm in self.assignments:
+            temp_list.append(assignm)
+        if iteration_var not in temp_list and not ctx.GRZLYNAME():
             self.assignments[iteration_var] = self.templates['int']
 
-        # IF ieration though range
+        # Iteration through range
         if ctx.rang():
-            self.statements.append(f'FOR {str(iteration_var)} IN {self.visit(ctx.rang())}')
+            self.statements.append(f'FOR {iteration_var} IN {self.visit(ctx.rang())}')
         
         # Iterating through variables (expr1 = iteration var)
         elif ctx.expr():
             var = self.visit(ctx.expr())
             if self.templates.profile == 'oracle':
                 raise UDFCompilerException(f'Iterating with variable "{var}" not possible in oracle')
-            self.statements.append(f'FOREACH {str(iteration_var)} IN ARRAY {var}')
+            self.statements.append(f'FOREACH {iteration_var} IN ARRAY {var}')
         
         # Iteration through grizzly refernce
         elif ctx.GRZLYNAME():
             # evaluate grizzly refernce
             _qry, _var = Python3d3Visitor.evaluate(self.to_eval)
             self.to_eval = []
+            # If query isn't a SQL-Query already
             if type(_qry) == grizzly.expression.ColRef:
                 _qry = _qry.generateQuery()
             
@@ -334,12 +337,12 @@ class Python3d3Visitor(ParseTreeVisitor):
             self.cursor.append(template.replace('$$var$$', _var).replace('$$qry$$', _qry))
 
             #self.statements.append(f'OPEN {str(iteration_var};')
-            self.statements.append(f"FOR {str(iteration_var)} IN {str(ctx.GRZLYNAME().getText())}")
+            self.statements.append(f'FOR {iteration_var} IN {str(ctx.GRZLYNAME().getText())}')
         
         # Create block for suite in for loop
-        self.statements.append("LOOP")
+        self.statements.append('LOOP')
         self.visit(ctx.suite())
-        self.statements.append("END LOOP;")
+        self.statements.append('END LOOP;')
 
     # Visit a parse tree produced by Python3d3Parser#suite.
     def visitSuite(self, ctx: Python3d3Parser.SuiteContext):
@@ -347,7 +350,7 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#Ob_test.
     def visitOb_test(self, ctx:Python3d3Parser.Ob_testContext):
-        # Function to visit test statements concatenated with logigal operators
+        # Function to visit test statements concatenated with logical operators
         tests = []
         if len(ctx.test()) == 1:
             return self.visit(ctx.test()[0])
@@ -361,7 +364,7 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#test.
     def visitTest(self, ctx:Python3d3Parser.TestContext):
-        # Function to visit test statmenets with comparasion operators
+        # Function to visit test statements with comparasion operators
         tsts = []
         if len(ctx.comp_op()) == 0:
             return self.visit(ctx.expr()[0])
@@ -377,7 +380,7 @@ class Python3d3Visitor(ParseTreeVisitor):
     # Visit a parse tree produced by Python3d3Parser#print_stmt.
     def visitPrint_stmt(self, ctx: Python3d3Parser.Print_stmtContext):
         self.contains_stmts['print'] = True
-        # special streatment for oracle and postgresql DBMS
+        # special treatment for oracle and postgresql DBMS
         if self.templates.profile == 'postgresql':
             # Check whether printed statement contains variables or just a string
             if ctx.expr().STRING():
@@ -387,7 +390,7 @@ class Python3d3Visitor(ParseTreeVisitor):
         else:
             template = self.templates['print']
         
-        # Add pre sql for enabling serveroutpur on oracle DBMS
+        # Add pre sql for enabling serveroutput on oracle DBMS
         if '/' in template:
             self.pre.append(template.split('/')[0])
             self.statements.append(template.split('/')[1].replace('$$code$$', self.visit(ctx.expr())))
@@ -398,17 +401,17 @@ class Python3d3Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by Python3d3Parser#range.
     def visitRang(self, ctx: Python3d3Parser.RangContext):
-        # Function to visit range statements
+        # Function to visit range statement
         if len(ctx.expr()) == 2:
             # If a special range between two expressions is defined
             l = self.visit(ctx.expr()[0])
             r = self.visit(ctx.expr()[1])
             if r in self.assignments:
                 r = f'{r} - 1'
-            for_loop = f"{str(l)}..{str(r)}"
+            for_loop = f'{str(l)}..{str(r)}'
         else:
             # If only the upper limit of range statement is defined (range(3))
-            for_loop = f"0..{str(self.visit(ctx.expr()[0]))}-1"
+            for_loop = f'0..{str(self.visit(ctx.expr()[0]))}-1'
         return for_loop
 
     # Visit a parse tree produced by Python3d3Parser#comp_op.
@@ -478,7 +481,7 @@ class Python3d3Visitor(ParseTreeVisitor):
     def visitCalc_op(self, ctx:Python3d3Parser.Calc_opContext):
         # Function to visit calculation operator
         calc_op = ctx.getText()
-        # special operators fpr postgresql DB
+        # special operators for postgresql
         if self.templates.profile == 'postgresql':
             if calc_op == '**':
                 calc_op = '^'
