@@ -162,7 +162,7 @@ compound_stmt: if_stmt | while_stmt | for_stmt | exception_stmt;
 if_stmt: 'if' ob_test ':' suite ('elif' ob_test ':' suite)* ('else' ':' suite)?;
 while_stmt: 'while' ob_test ':' suite;
 for_stmt: 'for' NAME 'in' (expr | rang | GRZLYNAME) ':' suite;
-exception_stmt: 'try:' suite (except_stmt ':' suite)* ('else' ':' suite)? ('finally' ':' suite)?;
+exception_stmt: 'try:' suite (except_stmt ':' suite)*;
 suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT;
 
 rang: 'range' OPEN_PAREN expr (SEP expr)? CLOSE_PAREN;
