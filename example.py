@@ -61,6 +61,6 @@ df["udf"] = df[["test_number"]].map(func, lang='sql', fallback=True)
 
 df = df[df['udf'] < 30]
 
-# Fallback only implemented for df.show()
+# Pandas fallback only implemented for df.show()
 print(df.generateQuery())
 df.show()

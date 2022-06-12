@@ -648,7 +648,7 @@ class DataFrame(object):
     funccall_found = False
     table = self
 
-    # Find first funccall and remove computedCol from DataFrame
+    # Find first funccall and remove computedCols from DataFrame
     while not funccall_found:
       # TODO: handle multiple funccalls in Fallback
       for x in table.computedCols:
@@ -667,14 +667,14 @@ class DataFrame(object):
       # Get Parameters for UDF
       inputcols = ", ".join(str(col.column).upper() for col in funccall.inputCols)
 
-      # Download Data into DataFrame (SQL-Statement without Projection of UDF)
+      # Download Data into DataFrame (SQL statement without projection of UDF)
       p_df = GrizzlyGenerator.to_df(table)
 
       # Different handlings for single and multiple parameters
       if len(funccall.inputCols) == 1:
         p_df[funccall.alias] = p_df[inputcols].apply(funccall.udf.func)
       else:
-        raise NotImplementedError('Fallback for UDFs with two parameters not supported yet')
+        raise NotImplementedError('Fallback for UDFs with more than one parameter not supported yet')
         #params = []
         #for p in funccall.inputCols:
         #  params.append(p_df[str(p.column).upper()])
