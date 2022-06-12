@@ -4,6 +4,7 @@ from typing import List, Tuple, Callable
 from grizzly.expression import ArithmExpr, ArithmeticOperation, BinaryExpression, BoolExpr, Constant, Expr, ColRef, FuncCall, ComputedCol, ExpressionException, ExprTraverser, LogicExpr, BooleanOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 from grizzly.expression import ModelUDF,UDF, Param, ModelType
+from grizzly.udfcompiler.udfcompiler_exceptions import UDFCompilerException
 
 import inspect
 
@@ -122,7 +123,7 @@ class DataFrame(object):
 
     return Ordering(by,ascending, self)
 
-  def _map(self, func, lines=[]):
+  def _map(self, func, lang, fallback, lines=[]):
     # XXX: if map is called on df it's a table UDF, if called on a projection it a scalar udf
     # df.map(myfunc) vs. df['a'].map(myfunc)
 
@@ -147,8 +148,7 @@ class DataFrame(object):
 
       returns = sig.return_annotation.__name__
       # returns = DataFrame._mapTypes(returns)
-
-      udf = UDF(funcName, params, lines, returns)
+      udf = UDF(funcName, params, lines, returns, lang, func, fallback)
       call = FuncCall(funcName, self.columns, udf)
 
       # return self.project([call])
@@ -277,8 +277,8 @@ class DataFrame(object):
     # return self.project([call])
     return call
 
-  def map(self, func):
-    return self._map(func)
+  def map(self, func, lang='py', fallback=False):
+    return self._map(func, lang, fallback)
 
 
   ###################################
@@ -639,7 +639,49 @@ class DataFrame(object):
     return f"{prequeries} {qry}"
 
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
-    print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
+    try:
+      print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
+    except UDFCompilerException:
+      print(self._fallback())
+  
+  def _fallback(self):
+    funccall_found = False
+    table = self
+
+    # Find first funccall and remove computedCols from DataFrame
+    while not funccall_found:
+      # TODO: handle multiple funccalls in Fallback
+      for x in table.computedCols:
+        if isinstance(x, FuncCall):
+          funccall = x
+          table.computedCols.remove(funccall)
+          funccall_found = True
+      # Get parent df if current df has no funccall objekt in computedCols 
+      table = table.parents[0]
+
+    if funccall.udf.fallback == False:
+      raise
+    else:
+      # Fallback to apply udf local with pandas
+      logger.info('Fallback to UDF execution with pandas')
+      # Get Parameters for UDF
+      inputcols = ", ".join(str(col.column).upper() for col in funccall.inputCols)
+
+      # Download Data into DataFrame (SQL statement without projection of UDF)
+      p_df = GrizzlyGenerator.to_df(table)
+
+      # Different handlings for single and multiple parameters
+      if len(funccall.inputCols) == 1:
+        p_df[funccall.alias] = p_df[inputcols].apply(funccall.udf.func)
+      else:
+        raise NotImplementedError('Fallback for UDFs with more than one parameter not supported yet')
+        #params = []
+        #for p in funccall.inputCols:
+        #  params.append(p_df[str(p.column).upper()])
+        #import numpy
+        #vfunc = numpy.vectorize(funccall.udf.func)
+        #p_df[funccall.alias] = vfunc(params)
+      return p_df
 
   def first(self):
     tup = GrizzlyGenerator.fetchone(self)

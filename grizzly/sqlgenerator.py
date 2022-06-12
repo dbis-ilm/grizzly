@@ -2,6 +2,8 @@ from grizzly.aggregates import AggregateType
 from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, ExternalTable, Projection, Filter, Join, Grouping, DataFrame
 from grizzly.expression import ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
+import grizzly.udfcompiler as udfcompiler
+from grizzly.udfcompiler.udfcompiler_exceptions import UDFCompilerException
 
 from typing import List, Tuple
 from pathlib import Path
@@ -467,8 +469,15 @@ class SQLGenerator:
 
   @staticmethod
   def _generateCreateFunc(udf: UDF, templates) -> str:
-    paramsStr = ",".join([f"{p.name} {SQLGenerator._mapTypes(p.type)}" for p in udf.params])
-    returnType = SQLGenerator._mapTypes(udf.returnType)
+    if templates.profile == 'oracle':
+      # Remove possible brackets in parameter/return (occurs for oracle dbs) and map with template datatypes
+      import re
+      remove_brackets_expr = "[\(].*?[\)]"
+      paramsStr = ",".join([f'{p.name} {re.sub(remove_brackets_expr, "", templates[p.type])}' for p in udf.params])
+      returnType = re.sub(remove_brackets_expr, "", templates[udf.returnType])
+    else:
+      paramsStr = ",".join([f'{p.name} {templates[p.type]}' for p in udf.params])
+      returnType = templates[udf.returnType]
 
     if isinstance(udf, ModelUDF):
       lines = templates[udf.modelType.name + "_code"]
@@ -476,15 +485,40 @@ class SQLGenerator:
         lines = lines.replace(key, str(value))
 
     else:
+      pre = ""
       lines = udf.lines[1:]
       lines = SQLGenerator._unindent(lines)
       lines = "".join(lines)
+      template = templates[f"createfunction_{udf.lang}"]
 
-    template = templates["createfunction"]
+      # Check if udf should be compiled to prozedural SQL, otherwise create PL/Python functions
+      if udf.lang == "sql":
+        template = templates[f"createfunction_{udf.lang}"]
+        try:
+          # Try to compile code of udf and pass mapping template
+          pre, lines = udfcompiler.compile(lines, templates, udf.params)
+        except Exception as e:
+          logger.info(f'Compiling of UDF to "{udf.lang}" failed: {e}')
+          # If compiling fails try fallbackmode with PL/PY translation if wanted
+          if udf.fallback == True:
+            try:
+              # Load Function creation template with python code
+              template = templates["createfunction_py"]
+              logger.info('Fallback to UDF execution with PL/Python...')
+            except ValueError:
+              logger.info('Fallback to UDF execution with PL/Python failed')
+              # Raise exception to make Fallback with pandas possible
+              raise UDFCompilerException(f'Compiling of UDF "{udf.name}" to "{udf.lang}" failed')
+          else:
+            raise
+
+    # Insert Functionname, parameters, return and actual code into createfunction template
     code = template.replace("$$name$$", udf.name)\
+      .replace("$$pre$$", pre)\
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\
-      .replace("$$code$$",lines)
+      .replace("$$code$$",lines)\
+      .replace("//", "\n")
     return code
 
   @staticmethod

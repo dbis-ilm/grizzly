@@ -8,7 +8,7 @@ class GrizzlyGenerator(object):
 
   @staticmethod
   def _incrAndGetTupleVar():
-    tVar = f"_t{GrizzlyGenerator.tVarCounter}"
+    tVar = f"t{GrizzlyGenerator.tVarCounter}"
     GrizzlyGenerator.tVarCounter += 1
     return tVar
 
@@ -39,6 +39,14 @@ class GrizzlyGenerator(object):
     return GrizzlyGenerator._backend.toString(df,delim,pretty,maxColWidth,limit)
 
   @staticmethod
+  def to_df(df):
+    """
+    Call the underlying generator, execute the query and return df representation
+    """
+    return GrizzlyGenerator._backend.to_df(df)
+
+  
+  @staticmethod
   def table(df):
     """
     Call the underlying generator, execute the query and return string representation
@@ -62,3 +70,5 @@ class GrizzlyGenerator(object):
   @staticmethod
   def _gen_aggregate(df, func):
     return GrizzlyGenerator._backend._gen_agg(df, func)
+
+  
