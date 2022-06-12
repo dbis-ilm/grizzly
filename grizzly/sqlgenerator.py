@@ -498,17 +498,17 @@ class SQLGenerator:
           # Try to compile code of udf and pass mapping template
           pre, lines = udfcompiler.compile(lines, templates, udf.params)
         except Exception as e:
-          logging.debug(f'Compiling to "{udf.lang}" failed: {e}')
+          logger.info(f'Compiling of UDF to "{udf.lang}" failed: {e}')
           # If compiling fails try fallbackmode with PL/PY translation if wanted
           if udf.fallback == True:
             try:
               # Load Function creation template with python code
               template = templates["createfunction_py"]
-              logging.info('Fallback to PL/Python')
+              logger.info('Fallback to UDF execution with PL/Python...')
             except ValueError:
-              logging.debug('Fallback to PL/Python failed')
+              logger.info('Fallback to UDF execution with PL/Python failed')
               # Raise exception to make Fallback with pandas possible
-              raise UDFCompilerException(f'Compiling of UDF "{udf.name}" to "{udf.lang}" failed', e)
+              raise UDFCompilerException(f'Compiling of UDF "{udf.name}" to "{udf.lang}" failed')
           else:
             raise
 
@@ -537,11 +537,7 @@ class SQLGenerator:
 
   def _generateFuncCall(self, f: FuncCall):
     if f.udf:
-      try:
-        pre = [SQLGenerator._generateCreateFunc(f.udf, self.templates)]
-      except UDFCompilerException as e:
-        # Catch compiler error and add funccall with more informatik for Fallback to it
-          raise UDFCompilerException('Error while compiling function', e, f) from e
+      pre = [SQLGenerator._generateCreateFunc(f.udf, self.templates)]
     else:
       pre = []
 
