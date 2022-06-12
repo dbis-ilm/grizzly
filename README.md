@@ -184,8 +184,19 @@ def myfunc(a: int) -> str:
     
 df = grizzly.read_table("events")  # load table
 df = df[df.globaleventid == 467268277] # filter it
+```
+
+Apply function with Python code on dbms (supported by PostgreSQL, Actian Vector and MonetDB)
+```Python
 df["newid"] = df["globaleventid"].map(myfunc) # apply myfunc
 ```
+
+Apply translated function with procedural SQL code (Oracle and PostgreSQL supported)
+```Python
+df["newid"] = df["globaleventid"].map(myfunc, lang='sql', fallback=True) # apply myfunc
+```
+
+The `lang` parameter defines whether the function is executed with Python code or the code is translated with the integrated `udfcompiler` module to a procedural language. The `fallback` parameter allows to apply the function with Python code or locally to a `Pandas DataFrame` if compilation errors occur.
 
 In the example above, the function `myfunc` is applied to all entries in the `globaleventid` column and the result is stored in a new column `newid`. 
 
