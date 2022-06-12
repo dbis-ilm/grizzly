@@ -4,6 +4,7 @@ from antlr4 import *
 from grizzly.udfcompiler.py_parser.Python3d3Lexer import Python3d3Lexer
 from grizzly.udfcompiler.py_parser.Python3d3Parser import Python3d3Parser
 from grizzly.udfcompiler.py_parser.Python3d3Visitor import Python3d3Visitor
+from grizzly.udfcompiler.udfcompiler_exceptions import UDFParseException
 
 def compile(input, templates, params):
     # Check if passed argument is a file or a string
@@ -21,6 +22,11 @@ def compile(input, templates, params):
     # Create the syntax tree with the file_input as the first executed rule (node)
     tree = parser.file_input()
 
+    errs = parser.getNumberOfSyntaxErrors()
+    if errs > 0:
+        print()
+        raise UDFParseException(f'{errs} sytnax error(s) or unsupported expressions in UDF, please check output above for further informations')
+
     # Create the grammar visitor
     visitor = Python3d3Visitor(templates, params)
     # visit the syntax tree
@@ -29,24 +35,24 @@ def compile(input, templates, params):
     #print(visitor.contains_stmts)
 
     # Add statements that should be queried before PL/SQL Block
-    pre = "\n ".join(line for line in visitor.pre)
+    pre = '\n'.join(line for line in visitor.pre)
     
-    plsql_function = ""
+    sql = ''
 
     # Collect all exceptions in udf
     for exception in visitor.exceptions:
-        plsql_function += (f"\n{exception}")
+        sql += (f'\n{exception}')
 
     # Add assignment statements for DECLARE block
     for var, assignment in visitor.assignments.items():
         if var not in (param.name for param in params):
-            plsql_function += (f"\n{var} {assignment};")
+            sql += (f'\n{var} {assignment};')
 
     # Add cursors after variable declaration
     for line in visitor.cursor:
-        plsql_function += (f"\n{line};")
+        sql += (f'\n{line};')
     
     # Add Statements for BEGIN block
-    plsql_function += "\n".join(str(line) for line in visitor.statements)
+    sql += '\n'.join(str(line) for line in visitor.statements)
     
-    return pre, plsql_function
+    return pre, sql
