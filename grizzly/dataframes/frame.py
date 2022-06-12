@@ -641,26 +641,47 @@ class DataFrame(object):
   def show(self, pretty=False, delim=",", maxColWidth=20, limit=20):
     try:
       print(GrizzlyGenerator.toString(self,delim,pretty,maxColWidth,limit))
-    except UDFCompilerException as e:
-      # Fallback to applying udf local with pandas
-      if e.funccall.udf.fallback == False:
-        raise
-      else:
-        print(self._fallback(e))
-    
-  def _fallback(self, e):
-    funccall = e.funccall
-    inputcols = ", ".join(str(col.column).upper() for col in funccall.inputCols)
-    # Get data for applying udf
+    except UDFCompilerException:
+      print(self._fallback())
+  
+  def _fallback(self):
+    funccall_found = False
     table = self
-    
-    # get last table (before funccall)
-    table = table.parents[0]
 
-    # TODO handle multiple parameters (not possible with df)
-    p_df = GrizzlyGenerator.to_df(table)
-    p_df[funccall.alias] = p_df[inputcols].apply(funccall.udf.func)
-    return p_df
+    # Find first funccall and remove computedCol from DataFrame
+    while not funccall_found:
+      # TODO: handle multiple funccalls in Fallback
+      for x in table.computedCols:
+        if isinstance(x, FuncCall):
+          funccall = x
+          table.computedCols.remove(funccall)
+          funccall_found = True
+      # Get parent df if current df has no funccall objekt in computedCols 
+      table = table.parents[0]
+
+    if funccall.udf.fallback == False:
+      raise
+    else:
+      # Fallback to apply udf local with pandas
+      logger.info('Fallback to UDF execution with pandas')
+      # Get Parameters for UDF
+      inputcols = ", ".join(str(col.column).upper() for col in funccall.inputCols)
+
+      # Download Data into DataFrame (SQL-Statement without Projection of UDF)
+      p_df = GrizzlyGenerator.to_df(table)
+
+      # Different handlings for single and multiple parameters
+      if len(funccall.inputCols) == 1:
+        p_df[funccall.alias] = p_df[inputcols].apply(funccall.udf.func)
+      else:
+        raise NotImplementedError('Fallback for UDFs with two parameters not supported yet')
+        #params = []
+        #for p in funccall.inputCols:
+        #  params.append(p_df[str(p.column).upper()])
+        #import numpy
+        #vfunc = numpy.vectorize(funccall.udf.func)
+        #p_df[funccall.alias] = vfunc(params)
+      return p_df
 
   def first(self):
     tup = GrizzlyGenerator.fetchone(self)
