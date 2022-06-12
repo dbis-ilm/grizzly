@@ -1,4 +1,5 @@
 oracle:
+  limit: limit
   int: INTEGER(12)
   str: VARCHAR2(12)
   float: FLOAT(12)
