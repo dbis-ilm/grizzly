@@ -5,8 +5,11 @@ from grizzly.dataframes.frame import Limit, Ordering, UDF, ModelUDF, Table, Exte
 from grizzly.expression import AllColumns, ArithmExpr, ArithmeticOperation, BoolExpr, BooleanOperation, ComputedCol, Constant, ExpressionException, FuncCall, ColRef, LogicExpr, LogicOperation, SetExpr, SetOperation
 from grizzly.generator import GrizzlyGenerator
 
-from typing import List, Set, Tuple
+import grizzly.udfcompiler as udfcompiler
+from grizzly.udfcompiler.udfcompiler_exceptions import UDFCompilerException
 
+from typing import List, Set, Tuple
+import re
 import logging
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,10 @@ class SQLGenerator:
   @staticmethod
   def _mapTypes(pythonType: str, mapping) -> str:
     if pythonType in mapping:
+      remove_parenthesis = mapping['remove_parenthesis'] if 'remove_parenthesis' in mapping else False
+      if remove_parenthesis:
+        remove_parenthesis_expr = "[\(].*?[\)]"
+        return re.sub(remove_parenthesis_expr, "", mapping[pythonType])
       return mapping[pythonType]
     
     return pythonType
@@ -462,8 +469,7 @@ class SQLGenerator:
     isVectorizedFunction = udf.name.startswith("vec_")
 
     vectorsArePassed = templates["vectorized_udfs"] if "vectorized_udfs" in templates else False
-
-    template = templates["createfunction"]
+    template = templates[f"createfunction_{udf.lang}"]
 
     paramsStr = ""
 
@@ -509,6 +515,7 @@ class SQLGenerator:
         lines = lines.replace(key, str(value))
 
     else:
+      pre = ""
       # lines = udf.lines
       lines = SQLGenerator._unindent(lines) # unindent, depends on where in the script the function was defined
 
@@ -516,12 +523,33 @@ class SQLGenerator:
 
       lines = "".join(lines) # put back together
 
+      if udf.lang == "sql":
+        try:
+          # Try to compile code of udf and pass mapping template
+          pre, lines = udfcompiler.compile(lines, templates, udf.params)
+        except Exception as e:
+          logger.info(f'Compiling of UDF to "{udf.lang}" failed: {e}')
+          # If compiling fails try fallbackmode with PL/PY translation if wanted
+          if udf.fallback == True:
+            try:
+              # Load Function creation template with python code
+              template = templates["createfunction_py"]
+              logger.info('Fallback to UDF execution with PL/Python...')
+            except ValueError:
+              logger.info('Fallback to UDF execution with PL/Python failed')
+              # Raise exception to make Fallback with pandas possible
+              raise UDFCompilerException(f'Compiling of UDF "{udf.name}" to "{udf.lang}" failed')
+          else:
+            raise
+
     # print(lines)
 
     code = template.replace("$$name$$", udf.name)\
+      .replace("$$pre$$", pre)\
       .replace("$$inparams$$",paramsStr)\
       .replace("$$returntype$$",returnType)\
-      .replace("$$code$$",lines)
+      .replace("$$code$$",lines)\
+      .replace("//", "\n")
 
     return code
 
