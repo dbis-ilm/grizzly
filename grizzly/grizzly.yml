@@ -1,10 +1,36 @@
-postgresql:
-
+oracle:
   types:
-    str: text
+    remove_parenthesis: True
+    limit: limit
+    int: INTEGER(12)
+    str: VARCHAR2(12)
+    float: FLOAT(12)
+    bool: BOOLEAN
+    cursor: CURSOR $$var$$ IS $$qry$$
+    ZeroDivisionError: Zero_Divide
+  funcs:
+    math.sqrt: sqrt($$params$$)
+    len: length($$params$$)
+    print: set serveroutput on; / dbms_output.put_line($$code$$);
+  createfunction_sql: $$pre$$ CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN $$returntype$$ IS $$code$$
 
+postgresql:
+  types:
+    int: INTEGER
+    str: VARCHAR
+    float: FLOAT8
+    bool: BOOLEAN
+    list: $$datatype$$[]
+    cursor: $$var$$ CURSOR FOR $$qry$$
+    ZeroDivisionError: division_by_zero
+  funcs:
+    math.sqrt: sqrt($$params$$)
+    len: length($$params$$)
+    print_str: raise notice '$$code$$';
+    print_var: raise notice '%', $$code$$;
   limit: limit
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE plpython3u AS '$$code$$' parallel safe;
+  createfunction_py: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ AS $$ //$$code$$$$ LANGUAGE plpython3u;
+  createfunction_sql: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ AS $$ DECLARE $$code$$ $$ LANGUAGE plpgsql;
   externaltable: 
     - CREATE SERVER IF NOT EXISTS import FOREIGN DATA WRAPPER $$fdw_extension_name$$
     - DROP FOREIGN TABLE IF EXISTS $$name$$
@@ -84,7 +110,7 @@ monetdb:
   #   $$code$$ 
   #   }; 
   vectorized_udfs: True
-  createfunction: | 
+  createfunction_py: | 
     CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURNS $$returntype$$ LANGUAGE python { 
     $$code$$ 
     };   
@@ -127,7 +153,7 @@ vector:
   types:
     str: varchar(1024)
   limit: top
-  createfunction: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
+  createfunction_py: CREATE OR REPLACE FUNCTION $$name$$($$inparams$$) RETURN ($$returntype$$) AS LANGUAGE PYTHON SOURCE='$$code$$'
   externaltable: 
     - DROP TABLE IF EXISTS $$name$$
     - CREATE EXTERNAL TABLE $$name$$($$schema$$) USING SPARK WITH REFERENCE='$$filenames$$', FORMAT='$$format$$' $$vectoroptions$$
