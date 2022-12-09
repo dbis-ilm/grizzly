@@ -20,7 +20,7 @@ class CodeMatcher(unittest.TestCase):
   @staticmethod
   def doMatchSnipped(snipped, template, removeLinebreaks):
     pattern = re.compile(r"\$t[0-9]+")
-    pattern2 = re.compile("_t[0-9]+")
+    pattern2 = re.compile("t[0-9]+")
 
     placeholders = pattern.findall(template)
     occurences = pattern2.findall(snipped)
@@ -45,4 +45,14 @@ class CodeMatcher(unittest.TestCase):
     
     matches = snippedClean == templateClean
 
+    if not matches:
+      print()
+      print(snippedClean)
+      for i in range(len(snippedClean)):
+        if snippedClean[i] != templateClean[i]:
+          print("^")
+          break
+
+        print(" ",end="")
+      print(templateClean)
     return matches, mapping, template, "Snipped does not match template" if not matches else ""

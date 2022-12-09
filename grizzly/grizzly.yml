@@ -17,7 +17,7 @@ oracle:
 postgresql:
   types:
     int: INTEGER
-    str: VARCHAR
+    str: TEXT
     float: FLOAT8
     bool: BOOLEAN
     list: $$datatype$$[]
