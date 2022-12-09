@@ -509,13 +509,14 @@ class SQLGenerator:
         leadingSpaces = len(line) - len(line.lstrip())
         break
 
+    pre = ""
     if isinstance(udf, ModelUDF):
       lines = templates[udf.modelType.name + "_code"]
       for key, value in udf.templace_replacement_dict.items():
         lines = lines.replace(key, str(value))
 
     else:
-      pre = ""
+      
       # lines = udf.lines
       lines = SQLGenerator._unindent(lines) # unindent, depends on where in the script the function was defined
 
