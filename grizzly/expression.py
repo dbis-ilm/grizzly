@@ -198,7 +198,7 @@ class UDF(object):
 
 class ModelUDF(UDF):
   def __init__(self, name: str, params: List[Param], returnType: str, modelType:ModelType, template_replacement_dict):
-    UDF.__init__(self,name, params, None, returnType)
+    UDF.__init__(self,name, params, None, returnType, lang="py")
     self.modelType = modelType
     self.templace_replacement_dict = template_replacement_dict
 
