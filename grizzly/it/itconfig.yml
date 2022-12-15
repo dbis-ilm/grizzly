@@ -14,15 +14,20 @@ postgresql:
 
 monetdb:
   image: monetdb/monetdb
+  # image: monetdb/monetdb:Jan2022-SP2
   user: monetdb
   password: monetdb
   port: 50000
   db: demo
   container_setup: 
     - rpm --import https://dev.monetdb.org/downloads/MonetDB-GPG-KEY
-    - dnf install -y python3 python3-pip MonetDB-python3
-    - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
+    - dnf install -y python3 python3-pip MonetDB-python3 python3-numpy
+    - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas numpy
+    - monetdb create demo
+    - monetdb release demo
+    # - monetdbd start /var/monetdb5/dbfarm 
     - monetdb set embedpy3=yes demo
+    # - monetdb start demo
 
 vector:
   image: actian/vector
