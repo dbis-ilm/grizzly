@@ -183,11 +183,14 @@ class ComputedCol(object):
 
 class UDF(object):
 
-  def __init__(self, name: str, params: List[Param], lines: List[str], returnType: str):
+  def __init__(self, name: str, params: List[Param], lines: List[str], returnType: str, lang: str=None, func=None, fallback=False):
     self.name = name
     self.params = params
     self.lines = lines
     self.returnType = returnType 
+    self.lang = lang
+    self.func = func
+    self.fallback = fallback
 
   def __str__(self):
     paramString = ','.join(str(p) for p in self.params)
@@ -195,7 +198,7 @@ class UDF(object):
 
 class ModelUDF(UDF):
   def __init__(self, name: str, params: List[Param], returnType: str, modelType:ModelType, template_replacement_dict):
-    UDF.__init__(self,name, params, None, returnType)
+    UDF.__init__(self,name, params, None, returnType, lang="py")
     self.modelType = modelType
     self.templace_replacement_dict = template_replacement_dict
 

@@ -416,7 +416,7 @@ class DataFrameTest(CodeMatcher):
     
     sql = "select computed, count($t1.*) from (select *,mymod($t0.n_name) as computed from nation $t0) $t1 group by computed"
 
-    expected = f"""create or replace function mymod(s text) returns int language plpython3u as 'return len(s) % 2' parallel safe;{sql}"""
+    expected = f"""create or replace function mymod(s text) returns integer as $$return len(s) % 2$$ language plpython3u;{sql}"""
 
     GrizzlyGenerator._backend.queryGenerator = oldGen
 
@@ -505,41 +505,41 @@ class DataFrameTest(CodeMatcher):
     # self.assertGreater(joined.count(), 0)
 
   def test_complexJoin(self):
-    df1 = grizzly.read_table("t1")
-    df2 = grizzly.read_table("t2")
+    df1 = grizzly.read_table("b1")
+    df2 = grizzly.read_table("b2")
     j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']) , how="left outer")
 
     # expected = "SELECT * FROM t1 $t0 LEFT OUTER JOIN t2 $t2 ON $t0.a = $t2.b AND $t0.c <= $t2.d".lower()
-    expected = "select * from (select * from t1 $t1) $t3 left outer join (select * from t2 $t2) $t4 on $t3.a = $t4.b and $t3.c <= $t4.d"
+    expected = "select * from (select * from b1 $t1) $t3 left outer join (select * from b2 $t2) $t4 on $t3.a = $t4.b and $t3.c <= $t4.d"
     
     actual = j.generateQuery()
 
     self.matchSnipped(actual, expected)
   
   def test_complexWhere(self):
-    df = grizzly.read_table("t1")
+    df = grizzly.read_table("b1")
     expr = (df['a'] == df['b']) & (df['c'] <= df['d'])
     df = df[expr]
 
-    expected = "select * from (select * from t1 $t1) $t2 where $t2.a = $t2.b and $t2.c <= $t2.d"
+    expected = "select * from (select * from b1 $t1) $t2 where $t2.a = $t2.b and $t2.c <= $t2.d"
     actual = df.generateQuery()
 
     self.matchSnipped(actual, expected)
 
   def test_parenthisExpr(self):
-    df = grizzly.read_table("t1")
+    df = grizzly.read_table("b1")
     expr = (df['a'] == df['b']) & ((df['c'] <= df['d']) | ((df.f > 3) & (df.e != None)))
     df = df[expr]
 
     actual = df.generateQuery()
-    expected = "select * from (select * from t1 $t1) $t2 where $t2.a = $t2.b and ($t2.c <= $t2.d or ($t2.f > 3 and $t2.e is not NULL))"
+    expected = "select * from (select * from b1 $t1) $t2 where $t2.a = $t2.b and ($t2.c <= $t2.d or ($t2.f > 3 and $t2.e is not NULL))"
 
     self.matchSnipped(actual, expected)
 
   def test_triJoin(self):
-    df1 = grizzly.read_table("t1")
-    df2 = grizzly.read_table("t2")
-    df3 = grizzly.read_table("t3")
+    df1 = grizzly.read_table("b1")
+    df2 = grizzly.read_table("b2")
+    df3 = grizzly.read_table("b3")
     df3 = df3[["b","d"]]
     j = df1.join(df2, on = (df1['a'] == df2['b']) & (df1['c'] <= df2['d']), how="left outer")
     
@@ -549,7 +549,7 @@ class DataFrameTest(CodeMatcher):
 
     actual = j2.generateQuery()
     # expected = "select $t1.m, $t2.x, $t4.b, $t4.d from t1 $t1 left outer join t2 $t2 on $t1.a = $t2.b and $t1.c <= $t2.d inner join (select $t3.b, $t3.d from t3 $t3) $t4 on $t1.m = $t4.b and $t1.x <= $t4.d"
-    expected = "select * from (select $t2.m, $t2.x from (select * from (select * from t1 $t0) $t0 left outer join (select * from t2 $t1) $t1 on $t0.a = $t1.b and $t0.c <= $t1.d) $t2) $t2 inner join (select $t6.b, $t6.d from (select * from t3 $t4) $t6) $t6 on $t3.m = $t6.b and $t3.x <= $t6.d"
+    expected = "select * from (select $t2.m, $t2.x from (select * from (select * from b1 $t0) $t0 left outer join (select * from b2 $t1) $t1 on $t0.a = $t1.b and $t0.c <= $t1.d) $t2) $t2 inner join (select $t6.b, $t6.d from (select * from b3 $t4) $t6) $t6 on $t3.m = $t6.b and $t3.x <= $t6.d"
     self.matchSnipped(actual, expected)
 
   def test_DistinctAll(self):
@@ -782,7 +782,7 @@ class DataFrameTest(CodeMatcher):
 
     actual = df.generateQuery()
 
-    expected = f"""create or replace function myfunc(a int) returns text language plpython3u as 'return a+"_grizzly"' parallel safe;{sql}"""
+    expected = f"""create or replace function myfunc(a integer) returns text as $$ return a+"_grizzly" $$ language plpython3u;{sql}"""
 
     GrizzlyGenerator._backend.queryGenerator = oldGen
 
@@ -1145,7 +1145,7 @@ class DataFrameTest(CodeMatcher):
       # df.show(pretty = True)
 
       actual = df.generateQuery()
-      expected = """CREATE OR REPLACE FUNCTION apply(input text) RETURNS text LANGUAGE plpython3u AS 'import onnxruntime
+      expected = """CREATE OR REPLACE FUNCTION apply(input text) RETURNS text AS $$ import onnxruntime
 import random
 def apply(input: str) -> str:
       def input_to_tensor(input:str):
@@ -1164,7 +1164,7 @@ def apply(input: str) -> str:
     return(tensor_to_output(ret))
   return apply_model(input)
 return apply(input)
-' parallel safe; SELECT sentiment, count($t0.review) FROM (SELECT *, apply($t2.review) as sentiment FROM reviews_SIZE $t2) $t0 GROUP BY sentiment"""
+$$ LANGUAGE plpython3u; SELECT sentiment, count($t0.review) FROM (SELECT *, apply($t2.review) as sentiment FROM reviews_SIZE $t2) $t0 GROUP BY sentiment"""
 
       self.matchSnipped(actual, expected)
     finally:
@@ -1188,18 +1188,18 @@ return apply(input)
     self.assertEqual(df.schema["actor1name"], ColType.TEXT)
 
   def test_describeTable(self):
-    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = grizzly.read_table("b", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
     # df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
     actual = df.describe().generateQuery()
-    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT * from t3 $t0) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT * from t3 $t0) $t2"
+    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT * from b $t0) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT * from b $t0) $t2"
 
     self.matchSnipped(actual, expected)
 
   def test_describeQuery(self):
-    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = grizzly.read_table("b", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
     df = df[[df.globaleventid, df.actor1name, df.actiongeo_long]]
     actual = df.describe().generateQuery()
-    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from t3 $t0) $t3) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from t3 $t0) $t3) $t2"
+    expected = "SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from b $t0) $t3) $t1 UNION ALL SELECT min($t2.actiongeo_long) as min, max($t2.actiongeo_long) as max, avg($t2.actiongeo_long) as mean, count($t2.actiongeo_long) as count FROM (SELECT $t3.globaleventid, $t3.actor1name, $t3.actiongeo_long FROM (SELECT * from b $t0) $t3) $t2"
 
     self.matchSnipped(actual, expected)
 
@@ -1211,7 +1211,7 @@ return apply(input)
     newGen = SQLGenerator("postgresql")
     GrizzlyGenerator._backend.queryGenerator = newGen
 
-    df = grizzly.read_table("t3", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
+    df = grizzly.read_table("b", index="globaleventid", schema = {"globaleventid":int, "actor1name":str, "actor1countrycode":str,"actiongeo_long":float})
     df = df[df.globaleventid]
 
     def myfunc(i: str) -> int:
@@ -1221,13 +1221,13 @@ return apply(input)
 
     df["newcol"] = df["actor1name"].map(myfunc)
     actual = df.describe().generateQuery()
-    expected = """CREATE OR REPLACE FUNCTION myfunc(i text) RETURNS int LANGUAGE plpython3u AS 'l = len(i)
+    expected = """CREATE OR REPLACE FUNCTION myfunc(i text) RETURNS integer AS $$l = len(i)
     l = l + l
     return l
-    ' parallel safe;
-    SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from t3 $t0) $t4) $t1 
+    $$ LANGUAGE plpython3u;
+    SELECT min($t1.globaleventid) as min, max($t1.globaleventid) as max, avg($t1.globaleventid) as mean, count($t1.globaleventid) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from b $t0) $t4) $t1 
     UNION ALL 
-    SELECT min($t3.newcol) as min, max($t3.newcol) as max, avg($t3.newcol) as mean, count($t3.newcol) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from t3 $t0) $t4) $t3"""
+    SELECT min($t3.newcol) as min, max($t3.newcol) as max, avg($t3.newcol) as mean, count($t3.newcol) as count FROM (SELECT $t4.globaleventid, myfunc($t4.actor1name) as newcol FROM (SELECT * from b $t0) $t4) $t3"""
     ""
 
 

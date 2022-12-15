@@ -1,6 +1,10 @@
 # from grizzly.generator import GrizzlyGenerator
 from unicodedata import decimal
 from grizzly.sqlgenerator import SQLGenerator
+# Imports needed for getting the db vendor
+import sqlite3
+import cx_Oracle
+import psycopg2
 
 import logging
 from typing import List
@@ -10,9 +14,23 @@ logger = logging.getLogger(__name__)
 
 class RelationalExecutor(object):
   
-  def __init__(self, connection, queryGenerator=SQLGenerator()):
+  def __init__(self, connection, queryGenerator=None):
     self.connection = connection
-    self.queryGenerator = queryGenerator
+    # Create SQLGenerator with known connection type
+    # Creates dependencies for cx_oracle and postgresql packages, if not wanted,
+    # profile for SQLGenerator must be defined manually for udf compiler
+    # another approach could be to try to execute vendorspecific sql statements
+    if not queryGenerator:
+      if type(connection) == cx_Oracle.Connection:
+        self.queryGenerator = SQLGenerator('oracle')
+      elif type(connection) == psycopg2.extensions.connection:
+        self.queryGenerator = SQLGenerator('postgresql')
+      elif type(connection) == sqlite3.Connection:
+        self.queryGenerator = SQLGenerator('sqlite')
+      else:
+        self.queryGenerator = SQLGenerator()
+    else:
+      self.queryGenerator = queryGenerator
     super().__init__()
 
   def generate(self, df):
@@ -180,6 +198,12 @@ class RelationalExecutor(object):
         resultRep.append(f"and {cnt - limit} more...")
 
       return "\n".join(resultRep)
+
+  def to_df(self, df):
+    (pre, qry) = self.queryGenerator.generate(df)
+    import pandas
+    p_df = pandas.read_sql(qry, self.connection)
+    return p_df
 
   def execute(self, df):
     """
