@@ -100,6 +100,11 @@ sqlite:
   colname_column: 1
   coltype_column: 2
 
+mysql:
+  types:
+    str: text
+  limit: limit
+
 monetdb:
   types:
     str: string

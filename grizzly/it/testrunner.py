@@ -102,7 +102,7 @@ class TestRunner(unittest.TestCase):
     logger.debug(f"Grizzly result is of type {type(grizzlyResult)}")
     if isinstance(pandasResult,float):
       try:
-        self.assertAlmostEqual(grizzlyResult, pandasResult,5)
+        self.assertAlmostEqual(grizzlyResult, pandasResult,4)
         return True
       except Exception as e:
         logger.debug(f"failed to match float results: {e}")

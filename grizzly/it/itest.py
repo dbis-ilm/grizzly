@@ -27,7 +27,7 @@ def startDockerContainer(dbName:str, settings, dockerClient):
 
   env = settings.get("environment",{})
 
-  logger.info(f"starting Docker container for {img}: Port: {portsDict}, env: {env}")
+  logger.debug(f"starting Docker container for {img}: Port: {portsDict}, env: {env}")
 
   containerName = f"grizzly_ittest_{dbName}"
 
@@ -65,7 +65,7 @@ def startDockerContainer(dbName:str, settings, dockerClient):
     try:
       if "container_setup" in settings:
         commands = settings["container_setup"]
-        logger.info(f"run container setup commands: {commands}")
+        logger.debug(f"run container setup commands: {commands}")
 
         # loop over setup commands 
         for cmd in commands:
@@ -99,7 +99,7 @@ def connectDB(dbName: str,settings: Dict):
     
   dbDB = settings["db"]
 
-  logger.info(f"connect to DB with {dbUser}:{dbPass} @ {dbDB} on port {dbPort}")
+  logger.debug(f"connect to DB with {dbUser}:{dbPass} @ {dbDB} on port {dbPort}")
 
   connection = module.connect(dbUser, dbPass, dbDB, dbPort)
   
@@ -152,7 +152,7 @@ def setupDB(con):
 
 
 
-  logger.info(f"finished DB setup: {cnt}")
+  logger.debug(f"finished DB setup: {cnt}")
 
 def loadTestConfig(dbName):
   
@@ -166,7 +166,7 @@ def loadTestConfig(dbName):
 
 if __name__ == "__main__":
 
-  logger.info("starting test setup")
+  logger.debug("starting test setup")
   if len(sys.argv) < 3:
     print(f"Please provide flag to indicate container start [docker] and the DB names! Got: {sys.argv}")
     exit(1)
@@ -200,7 +200,7 @@ if __name__ == "__main__":
       (dbCon,alchemyCon) = connectDB(dbName, settings)
       logger.debug(f"connected: {dbCon}")
 
-      logger.info("start running tests")
+      logger.debug("start running tests")
 
 
       if needsSetup:
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         print(" \U0001F43B", end='')
 
       print(f"\t{(end - start):.5f} secs")  
-      logger.info("finished running tests")
+      logger.debug("finished running tests")
 
 
       summary[dbName] = failedTests
@@ -228,7 +228,7 @@ if __name__ == "__main__":
         logger.debug("cleaning up")
         
         container.stop()
-        logger.info(f"stopped container {container}")
+        logger.debug(f"stopped container {container}")
 
   fails = []
   for (db, failedTests) in summary.items():

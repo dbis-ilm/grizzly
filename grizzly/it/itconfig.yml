@@ -12,9 +12,23 @@ postgresql:
     - psql -U postgres -c "create language plpython3u"
     - psql -U postgres -c "CREATE EXTENSION file_fdw"
 
+mysql:
+  image: mysql
+  environment:
+    MYSQL_ROOT_PASSWORD: example
+    MYSQL_DATABASE: demo
+    MYSQL_USER: demo
+    MYSQL_PASSWORD: demo
+  user: demo
+  password: demo
+  port: 3306
+  db: demo
+  container_setup:
+    - sleep 10
+
 monetdb:
-  image: monetdb/monetdb
-  # image: monetdb/monetdb:Jan2022-SP2
+  # image: monetdb/monetdb
+  image: monetdb/monetdb:Jan2022-SP2
   user: monetdb
   password: monetdb
   port: 50000
@@ -22,7 +36,7 @@ monetdb:
   container_setup: 
     - rpm --import https://dev.monetdb.org/downloads/MonetDB-GPG-KEY
     - dnf install -y python3 python3-pip MonetDB-python3 python3-numpy
-    - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas numpy
+    # - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas numpy
     - monetdb create demo
     - monetdb release demo
     # - monetdbd start /var/monetdb5/dbfarm 
@@ -39,3 +53,5 @@ vector:
     - 44223
     - 27839
     - 16902
+
+  
