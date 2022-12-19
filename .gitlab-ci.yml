@@ -32,23 +32,25 @@ test:monetdb:
   tags:
     - grouprunner
   before_script:
-    - python -V  # Print out python version for debugging
+    - rpm --import https://dev.monetdb.org/downloads/MonetDB-GPG-KEY
+    - dnf install -y python3 python3-pip MonetDB-python3
     - pip install wheel pyyaml sqlalchemy_monetdb pymonetdb pandas
-    - dnf install -y https://www.monetdb.org/downloads/Fedora/33/x86_64/MonetDB-python3-11.39.17-20210503.fc33.x86_64.rpm #install python extensin
     - monetdb set embedpy3=yes demo #enable python
+    - monetdbd start -n /var/monetdb5/dbfarm &
   script:
     python -m grizzly.it.itest nodocker monetdb
 
 test:postgresql:
-  image: postgres
+  image: postgres:13
   tags:
     - grouprunner
   before_script:
-    - apt update
-    - apt install -y python3 python3-pip
-    - python3 -V  # Print out python version for debugging
+    - apt-get update
+    - apt-get install  -y postgresql-plpython3-13 python3 python3-pip
     - pip3 install wheel pyyaml psycopg2-binary pandas sqlalchemy
-    - /docker-entrypoint.sh postgres &
+    - /usr/local/bin/docker-entrypoint.sh postgres &
+    - psql -U postgres -c "create language plpython3u"
+    - psql -U postgres -c "CREATE EXTENSION file_fdw"
   script:
     python3 -m grizzly.it.itest nodocker postgresql
 

@@ -93,14 +93,18 @@ class Schema(object):
     else:
       return list(self.typeDict.values())
   
-  def columns(self, filterFunc = None):
+  def columns(self, filterFunc = None, df = None):
     if self.typeDict is None:
       return []
     else:
       l = self.typeDict.items()
       if filterFunc is not None:
         l = filter(filterFunc, l)
-      return list(map(lambda t : t[0], l))
+
+      if df:
+        return list(map(lambda x: ColRef(x[0], df), l)) 
+      else:
+        return list(map(lambda t : t[0], l))
 
   def check(self, item):
     if self.typeDict is None:
@@ -111,6 +115,19 @@ class Schema(object):
     for col in accessedCols:
       if not (isinstance(col, AllColumns) or col in self.columns()):
         raise SchemaError(f"invalid column reference: {col} not in {self.typeDict}")
+
+  def checkType(self, col, value):
+    if self.typeDict is None:
+      return False
+
+    colName = Schema._getName(col)
+    if not colName in self.typeDict:
+      raise SchemaError("No such column: " + colName)
+
+    valType = Schema._inferType(value, self)
+    colType = self[colName]
+    return  valType == colType
+
 
   @staticmethod
   def _getRefs(item):
